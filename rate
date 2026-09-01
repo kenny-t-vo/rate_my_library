@@ -1,0 +1,5 @@
+#!/bin/sh
+# rate_my_library launcher. Uses /usr/bin/python3 because the python.org build on
+# this machine ships without CA certificates, and build.py needs working TLS.
+cd "$(dirname "$0")" || exit 1
+exec /usr/bin/python3 rate.py "$@"

@@ -1,0 +1,12 @@
+# personal listening data and generated output
+data/albums.json
+data/ratings.json
+data/history.jsonl
+data/config.json
+data/snapshots/
+data/art/
+data/*.log
+out/
+*.csv
+__pycache__/
+.DS_Store

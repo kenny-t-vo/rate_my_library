@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>rate_my_library</title>
+<style>
+/* ══ tokens ══════════════════════════════════════════════════════════ */
+:root{
+  --bg:#fff; --fg:#111; --dim:#6f6f6f; --faint:#9a9a9a;
+  --rule:#dcdcdc; --rule2:#111;
+  --blue:#0000ee; --purple:#551a8b; --wash:#f2f2f7;
+  --serif:"Times New Roman",Times,"Liberation Serif","Hiragino Mincho ProN","Yu Mincho",serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  /* six steps, nothing between them. serif carries language, mono carries data. */
+  --t1:30px;   /* album title, the only large thing on screen */
+  --t2:18px;   /* panel headings */
+  --t3:14px;   /* artist, prose, form labels */
+  --t4:12.5px; /* nav, track names, secondary copy */
+  --t5:11px;   /* numeric data */
+  --t6:10.5px; /* labels, tags, key hints */
+  --pad:34px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font:var(--t3)/1.45 var(--serif);overflow:hidden;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:var(--blue);text-decoration:underline;text-underline-offset:2px}
+a:visited{color:var(--purple)}
+a:hover{color:var(--purple)}
+button{font:inherit;background:none;border:0;color:inherit;cursor:pointer}
+::selection{background:var(--blue);color:#fff}
+
+.lbl{font:var(--t6)/1 var(--serif);letter-spacing:.09em;text-transform:lowercase;color:var(--faint)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.lnk{color:var(--blue);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.lnk:hover{color:var(--purple)}
+.lnk.on{color:var(--purple)}
+
+/* ══ shell ═══════════════════════════════════════════════════════════ */
+#app{height:100%;display:flex;flex-direction:column}
+header{flex:none;display:flex;align-items:baseline;gap:22px;padding:13px var(--pad) 10px;
+  border-bottom:1px solid var(--rule2)}
+header .id{font:var(--t6)/1 var(--serif);letter-spacing:.09em}
+header .sp{flex:1}
+header nav{display:flex;gap:16px;font-size:var(--t4)}
+#prog{position:relative;width:132px;height:3px;background:var(--rule);top:-1px}
+#prog i{position:absolute;inset:0 auto 0 0;background:var(--blue);width:0;transition:width .25s ease}
+
+main{flex:1;display:grid;grid-template-columns:186px minmax(0,1fr) 314px;
+  min-height:0;overflow:hidden}
+main>*{padding:22px var(--pad);min-height:0;overflow:hidden}
+.colL{border-right:1px solid var(--rule);display:flex;flex-direction:column;gap:22px;padding-left:var(--pad)}
+.colM{display:flex;flex-direction:column;min-width:0;overflow-y:auto;scrollbar-width:thin}
+.colR{border-left:1px solid var(--rule);display:flex;flex-direction:column;gap:16px;padding-right:var(--pad)}
+
+/* ══ left column ═════════════════════════════════════════════════════ */
+.navlist{display:flex;flex-direction:column;gap:5px;font-size:var(--t4)}
+.navlist div{display:flex;gap:7px;align-items:baseline}
+.navlist .t{color:var(--faint);font:var(--t6)/1 var(--serif)}
+.navlist kbd{margin-left:auto;font:var(--t6)/1 var(--mono);color:var(--faint)}
+.sect{display:flex;flex-direction:column;gap:6px}
+.sect .hd{padding-bottom:5px;border-bottom:1px solid var(--rule)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:9px;font-size:var(--t4);line-height:1.62}
+.kv dt{color:var(--dim)}
+.kv dd{font:var(--t5)/1.62 var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+
+/* ══ centre: the album ═══════════════════════════════════════════════ */
+.head{display:flex;align-items:baseline;gap:10px;margin-bottom:18px;flex:none}
+.head .sep{color:var(--rule);}
+.hero{display:flex;gap:28px;min-height:0;flex:none}
+.cover{width:min(29vh,268px);aspect-ratio:1;flex:none;background:var(--wash);position:relative;
+  border:1px solid var(--rule);overflow:hidden}
+.cover img{width:100%;height:100%;object-fit:cover;display:block;opacity:1;transition:opacity .16s ease}
+.cover.load img{opacity:0}
+.cover.none::after{content:"no cover";position:absolute;inset:0;display:grid;place-items:center;
+  font:var(--t6)/1 var(--serif);letter-spacing:.09em;color:var(--faint)}
+.titles{min-width:0;flex:1;display:flex;flex-direction:column}
+h1{font-size:clamp(21px,2.3vw,var(--t1));font-weight:400;line-height:1.06;letter-spacing:-.018em;
+  overflow-wrap:anywhere;margin:-0.201em 0 7px}
+h2{font-size:var(--t3);font-weight:400;margin-bottom:13px;overflow-wrap:anywhere}
+h2 a{text-underline-offset:3px}
+.tagrow{display:flex;flex-wrap:wrap;gap:5px 8px}
+.tag{font:var(--t6)/1 var(--serif);letter-spacing:.05em;text-transform:lowercase;color:var(--dim);
+  border:1px solid var(--rule);padding:4px 6px}
+.tag.hot{border-color:var(--blue);color:var(--blue)}
+.tag.warn{border-color:var(--purple);color:var(--purple)}
+.rym{font-size:var(--t4);line-height:1;margin-top:7px}
+.rym .lbl{margin-left:7px}
+.calib{font-size:var(--t4);color:var(--dim);line-height:1.5;margin-top:auto;padding-top:12px}
+.calib b{font-family:var(--mono);font-size:var(--t5);color:var(--fg)}
+
+/* ══ rating row ══════════════════════════════════════════════════════ */
+.ctx{margin-top:20px;flex:none;max-width:520px;padding-bottom:4px}
+.ctxHd{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px;border-bottom:1px solid var(--rule);margin-bottom:8px}
+#years .r{grid-template-columns:34px 42px 1fr}
+.rate{margin-top:20px;flex:none}
+.rateHd{display:flex;align-items:baseline;gap:12px;padding-bottom:7px;
+  border-bottom:1px solid var(--rule2);margin-bottom:10px}
+.stars{font-size:16px;letter-spacing:.05em;min-width:78px}
+.rval{font:var(--t4)/1 var(--mono)}
+.rval.un{color:var(--faint);font:var(--t6)/1 var(--serif);letter-spacing:.09em}
+.scale{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;max-width:520px}
+.cell{border:1px solid var(--rule);padding:8px 0 9px;text-align:center;cursor:pointer;
+  transition:background .09s,border-color .09s,color .09s;user-select:none}
+.cell .k{display:block;font:9px/1 var(--mono);color:var(--faint);margin-bottom:5px;letter-spacing:.05em}
+.cell .v{display:block;font:var(--t4)/1 var(--mono);font-variant-numeric:tabular-nums}
+.cell:hover{border-color:var(--blue);color:var(--blue)}
+.cell:hover .k{color:var(--blue)}
+.cell.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.cell.on .k{color:rgba(255,255,255,.72)}
+
+/* ══ note ════════════════════════════════════════════════════════════ */
+.note{margin-top:15px;flex:none;max-width:520px}
+.noteHd{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+#noteBox{width:100%;max-width:520px;min-height:30px;height:30px;border:0;border-bottom:1px solid var(--rule);
+  background:none;font:var(--t4)/1.5 var(--serif);color:var(--fg);resize:none;outline:none;padding:3px 0 6px;
+  transition:height .14s ease,border-color .14s}
+#noteBox:focus{border-bottom-color:var(--blue);height:86px}
+#noteBox.has{border-bottom-color:var(--purple)}
+#noteBox::placeholder{color:var(--faint);font-style:italic}
+#noteCount{margin-left:auto;font:var(--t6)/1 var(--mono);color:var(--faint);opacity:0;transition:opacity .14s}
+#noteBox:focus~#noteCount,.note.editing #noteCount{opacity:1}
+#noteCount.over{color:var(--purple)}
+
+/* ══ right column ════════════════════════════════════════════════════ */
+.panel{display:flex;flex-direction:column;min-height:0}
+.panel>.hd{display:flex;align-items:baseline;justify-content:space-between;
+  padding-bottom:6px;border-bottom:1px solid var(--rule2);margin-bottom:8px;flex:none}
+.years{display:flex;flex-direction:column;gap:2px;font:var(--t5)/1.55 var(--mono);flex:none}
+.years .r{display:grid;grid-template-columns:32px 38px 1fr;gap:8px;align-items:center}
+#distr .r{grid-template-columns:26px 1fr 20px}
+#distr .r span:nth-child(2){text-align:left;order:3;color:var(--faint)}
+#distr .r i{order:2}
+.years .r span:nth-child(2){text-align:right;color:var(--dim)}
+.years .r i{display:block;height:7px;background:var(--blue);opacity:.82}
+.years .r.top i{opacity:1}
+.tracks{overflow-y:auto;flex:1;min-height:0;scrollbar-width:thin;padding-right:2px}
+.tracks::-webkit-scrollbar{width:5px}
+.tracks::-webkit-scrollbar-thumb{background:var(--rule)}
+.trk{display:grid;grid-template-columns:17px 1fr auto;gap:10px;align-items:baseline;
+  padding:3.5px 0;position:relative;border-bottom:1px solid #f2f2f2}
+.trk .n{font:var(--t6)/1.5 var(--mono);color:var(--faint);text-align:left}
+.trk .t{font-size:var(--t4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trk .c{font:var(--t5)/1.5 var(--mono);color:var(--dim)}
+.trk.top .t{color:var(--blue)}
+.trk .bar{position:absolute;left:27px;bottom:0;height:1.5px;background:var(--blue);opacity:.35}
+
+/* ══ carousel ════════════════════════════════════════════════════════ */
+footer{flex:none;border-top:1px solid var(--rule2);padding:8px var(--pad) 9px;
+  display:flex;flex-direction:column;gap:8px}
+.strip{overflow:hidden;position:relative;height:53px}
+.stripInner{display:flex;gap:6px;position:absolute;left:50%;top:0;
+  transition:transform .26s cubic-bezier(.22,.61,.36,1)}
+.th{width:42px;height:42px;flex:none;background:var(--wash);border:1px solid var(--rule);
+  position:relative;cursor:pointer;overflow:hidden}
+.th img{width:100%;height:100%;object-fit:cover;display:block}
+.th.cur{border-color:var(--blue);outline:1px solid var(--blue);outline-offset:1px}
+.th.rated::after{content:attr(data-r);position:absolute;left:0;right:0;bottom:0;
+  background:var(--purple);color:#fff;font:8px/1.5 var(--mono);text-align:center}
+.th.cur.rated::after{background:var(--blue)}
+.statusbar{display:flex;align-items:baseline;gap:16px}
+.statusbar .sp{flex:1}
+#save{display:flex;align-items:center;gap:5px}
+#save .dot{width:5px;height:5px;border-radius:50%;background:var(--blue);flex:none}
+#save.pend .dot{background:var(--purple)}
+#save.err .dot{background:#c00}
+
+/* ══ overlays ════════════════════════════════════════════════════════ */
+.ov{position:fixed;inset:0;z-index:40;background:rgba(255,255,255,.86);display:none;
+  align-items:flex-start;justify-content:center;padding:7vh 24px 24px;overflow-y:auto}
+.ov.on{display:flex;animation:fade .13s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.card{background:#fff;border:1px solid var(--rule2);width:min(690px,100%);padding:26px 30px 30px}
+.card h3{font-size:var(--t2);font-weight:400;letter-spacing:-.015em;margin-bottom:4px}
+.card .cs{color:var(--dim);font-size:var(--t4);margin-bottom:19px;line-height:1.5}
+.grp{margin-bottom:24px}
+.grp>.hd{padding-bottom:6px;border-bottom:1px solid var(--rule2);margin-bottom:11px}
+.opt{display:grid;grid-template-columns:158px 1fr auto;gap:14px;align-items:center;
+  padding:6px 0;font-size:var(--t3)}
+.opt label{color:var(--dim)}
+.opt input[type=range]{width:100%;accent-color:var(--blue)}
+.opt output{font:var(--t5)/1 var(--mono);color:var(--fg);min-width:34px;text-align:right}
+select,input[type=text]{font:var(--t3)/1.3 var(--serif);color:var(--fg);background:#fff;
+  border:1px solid var(--rule);padding:6px 8px;width:100%;outline:none}
+select:focus,input[type=text]:focus{border-color:var(--blue)}
+.tog{justify-self:end;font:var(--t6)/1 var(--serif);letter-spacing:.07em;text-transform:lowercase;
+  border:1px solid var(--rule);padding:5px 9px;cursor:pointer;min-width:56px;text-align:center}
+.tog.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.snap{display:grid;grid-template-columns:1fr auto auto auto;gap:13px;align-items:baseline;
+  padding:7px 0;border-bottom:1px solid var(--rule);font-size:var(--t4)}
+.snap .m{font:var(--t5)/1 var(--mono);color:var(--dim)}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:7px 16px;font-size:var(--t4);align-items:baseline}
+.keys kbd{font:var(--t6)/1 var(--mono);border:1px solid var(--rule);padding:2.5px 6px;white-space:nowrap}
+.keys span{color:var(--dim)}
+.rowbtns{display:flex;gap:18px;margin-top:6px;font-size:var(--t4)}
+.res{max-height:52vh;overflow-y:auto;margin-top:12px}
+.ri{display:grid;grid-template-columns:38px 1fr auto;gap:12px;align-items:center;padding:6px 5px;cursor:pointer}
+.ri:hover,.ri.sel{background:var(--wash)}
+.ri img{width:34px;height:34px;object-fit:cover;background:var(--wash);display:block}
+.ri .a{font-size:var(--t3)}.ri .b{font-size:var(--t4);color:var(--dim)}
+.ri .c{font:var(--t5)/1 var(--mono);color:var(--dim);text-align:right;white-space:nowrap}
+#toast{position:fixed;left:50%;bottom:98px;transform:translate(-50%,8px);z-index:60;background:#fff;
+  border:1px solid var(--rule2);padding:9px 15px;font-size:var(--t4);opacity:0;pointer-events:none;
+  transition:opacity .18s,transform .18s}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+#banner{position:fixed;left:0;right:0;top:0;z-index:70;background:var(--purple);color:#fff;
+  padding:8px var(--pad);font-size:var(--t4);display:none;align-items:center;gap:16px}
+#banner.on{display:flex}
+#banner a{color:#fff}
+/* short windows: tighten the fixed blocks so the year chart never ends up
+   behind the filmstrip. colM still scrolls as a last resort. */
+@media(max-height:800px){
+  .cover{width:min(26vh,232px)}
+  .rate{margin-top:14px} .note{margin-top:11px} .ctx{margin-top:14px}
+  .head{margin-bottom:12px} h2{margin-bottom:10px}
+  .years{gap:1px} .years .r i{height:6px}
+  main>*{padding-top:16px}
+}
+@media(max-height:700px){
+  .cover{width:min(24vh,196px)}
+  .ctx{display:none}
+  .rate{margin-top:12px}
+}
+@media(max-width:1140px){main{grid-template-columns:160px minmax(0,1fr)}.colR{display:none}}
+@media(max-width:820px){main{grid-template-columns:1fr;overflow-y:auto}.colL{display:none}
+  .hero{flex-direction:column}}
+</style></head>
+<body>
+<div id="banner"><span id="bannerT"></span><a href="#" id="bannerR">reload</a></div>
+<div id="app">
+
+<header>
+  <span class="id">rate_my_library.</span>
+  <div id="prog"><i></i></div>
+  <span class="lbl" id="hcount">0 / 0</span>
+  <span class="sp"></span>
+  <nav>
+    <a class="lnk" data-ov="ovFind">search</a>
+    <a class="lnk" data-ov="ovSet">settings</a>
+    <a class="lnk" data-ov="ovSnap">saves</a>
+    <a class="lnk" data-ov="ovOut">export</a>
+    <a class="lnk" data-ov="ovKeys">keys</a>
+    <a class="lnk" data-ov="ovAbout">about</a>
+  </nav>
+</header>
+
+<main>
+  <!-- ── left ─────────────────────────────────────────────── -->
+  <div class="colL">
+    <div class="sect">
+      <div class="hd lbl">queue.</div>
+      <div class="navlist" id="navQ"></div>
+    </div>
+    <div class="sect">
+      <div class="hd lbl">this session.</div>
+      <dl class="kv" id="sessK"></dl>
+    </div>
+    <div class="sect">
+      <div class="hd lbl">distribution.</div>
+      <div class="years" id="distr"></div>
+    </div>
+  </div>
+
+  <!-- ── centre ───────────────────────────────────────────── -->
+  <div class="colM">
+    <div class="head">
+      <span class="lbl" id="pos"></span><span class="sep lbl">/</span>
+      <span class="lbl" id="posAlt"></span>
+    </div>
+    <div class="hero">
+      <div class="cover" id="cover"><img id="coverImg" alt=""></div>
+      <div class="titles">
+        <h1 id="title"></h1>
+        <h2><a id="artist" target="_blank" rel="noopener"></a></h2>
+        <div class="tagrow" id="tags"></div>
+        <div class="calib" id="calib"></div>
+        <div class="rym" id="rym"></div>
+      </div>
+    </div>
+
+    <div class="rate">
+      <div class="rateHd">
+        <span class="stars" id="stars"></span>
+        <span class="rval un" id="rval">unrated</span>
+        <span class="sp" style="flex:1"></span>
+        <span class="lbl">press 1 to 0</span>
+      </div>
+      <div class="scale" id="scale"></div>
+    </div>
+
+    <div class="note" id="noteWrap">
+      <div class="noteHd">
+        <span class="lbl">note.</span>
+        <span class="lbl" style="color:var(--faint)">press n</span>
+        <span id="noteCount"></span>
+      </div>
+      <textarea id="noteBox" maxlength="500" rows="1" spellcheck="false"
+        placeholder="a line of context for this album"></textarea>
+    </div>
+
+    <div class="ctx" id="ctx">
+      <div class="ctxHd"><span class="lbl">plays by year.</span><span class="lbl" id="ctxSum"></span></div>
+      <div class="years" id="years"></div>
+    </div>
+  </div>
+
+  <!-- ── right ────────────────────────────────────────────── -->
+  <div class="colR">
+    <div class="panel" style="flex:none">
+      <div class="hd"><span class="lbl">listening.</span><span class="lbl" id="lisSum"></span></div>
+      <dl class="kv" id="meta"></dl>
+    </div>
+    <div class="panel" style="flex:1;min-height:0">
+      <div class="hd"><span class="lbl">tracks.</span><span class="lbl" id="trkSum"></span></div>
+      <div class="tracks" id="tracks"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="strip" id="strip"><div class="stripInner" id="stripInner"></div></div>
+  <div class="statusbar">
+    <span class="lbl" id="stat"></span>
+    <span class="sp"></span>
+    <span class="lbl" id="last"></span>
+    <span id="save" class="lbl"><span class="dot"></span><span id="saveT">saved</span></span>
+  </div>
+</footer>
+</div>
+
+<!-- ══ overlays ══════════════════════════════════════════════════ -->
+<div class="ov" id="ovFind"><div class="card">
+  <h3>find an album.</h3><div class="cs">Jumps the queue to any album in your library.</div>
+  <input type="text" id="findI" placeholder="artist or album" autocomplete="off" spellcheck="false">
+  <div class="res" id="findR"></div>
+</div></div>
+
+<div class="ov" id="ovSet"><div class="card">
+  <h3>settings.</h3><div class="cs">Changes apply immediately and are remembered.</div>
+  <div class="grp"><div class="hd lbl">queue.</div>
+    <div class="opt"><label>minimum plays</label><input type="range" id="sMin" min="8" max="200"><output id="oMin"></output></div>
+    <div class="opt"><label>minimum tracks heard</label><input type="range" id="sTrk" min="1" max="12"><output id="oTrk"></output></div>
+    <div class="opt"><label>order</label><select id="sSort">
+      <option value="plays">total plays, most streamed first</option>
+      <option value="spins">album spins (plays ÷ tracks)</option>
+      <option value="breadth">track breadth, most of the record heard</option>
+      <option value="recent">recently played</option>
+      <option value="discovered">first discovered, oldest first</option>
+      <option value="artist">artist a to z</option>
+      <option value="random">shuffled</option></select><span></span></div>
+    <div class="opt"><label>show</label><select id="sShow">
+      <option value="all">everything</option>
+      <option value="unrated">unrated only</option>
+      <option value="rated">rated only</option>
+      <option value="flagged">flagged for revisit</option>
+      <option value="noted">with notes</option></select><span></span></div>
+    <div class="opt"><label></label><span class="lbl" id="sCount"></span><span></span></div>
+  </div>
+  <div class="grp"><div class="hd lbl">behaviour.</div>
+    <div class="opt"><label>advance after rating</label><span class="lbl">move to the next album automatically</span><span class="tog" id="tAdv">on</span></div>
+    <div class="opt"><label>cover filmstrip</label><span class="lbl">show the queue along the bottom</span><span class="tog" id="tCar">on</span></div>
+    <div class="opt"><label>confirm hiding</label><span class="lbl">ask before “not an album”</span><span class="tog" id="tConf">off</span></div>
+  </div>
+  <div class="grp"><div class="hd lbl">library.</div>
+    <div class="opt"><label>source</label><select id="impSrc">
+      <option value="auto">detect from the file</option>
+      <option value="lastfm">Last.fm scrobble export (.csv)</option>
+      <option value="spotify">Spotify extended streaming history (.zip / folder)</option>
+    </select><span></span></div>
+    <div class="opt"><label>file or folder</label>
+      <input type="text" id="impPath" placeholder="~/Downloads/scrobbles-name-0000.csv"><span></span></div>
+    <div class="rowbtns"><a class="lnk" id="impGo">import and rebuild</a>
+      <span class="lbl" id="impMsg"></span></div>
+    <div id="impNote" style="font-size:var(--t4);color:var(--dim);line-height:1.55;margin-top:12px"></div>
+  </div>
+  <div class="rowbtns"><a class="lnk" id="setClose">close</a></div>
+</div></div>
+
+<div class="ov" id="ovSnap"><div class="card">
+  <h3>save states.</h3><div class="cs">Every rating is already saved the moment you press it.
+    These are named restore points. A snapshot is taken automatically before any
+    restore, so restoring is itself undoable.</div>
+  <div class="grp"><div class="hd lbl">create.</div>
+    <div class="opt"><label>name</label><input type="text" id="snapName" placeholder="before re-rating the 4s"><span></span></div>
+    <div class="rowbtns"><a class="lnk" id="snapGo">save state now</a></div>
+  </div>
+  <div class="grp"><div class="hd lbl">restore.</div><div id="snapList"></div></div>
+  <div class="rowbtns"><a class="lnk" id="snapClose">close</a></div>
+</div></div>
+
+<div class="ov" id="ovOut"><div class="card">
+  <h3>export.</h3><div class="cs">Writes everything to <span class="mono">out/</span>. Safe to run any time.</div>
+  <div class="grp"><div class="hd lbl">files.</div>
+    <dl class="kv" style="font-size:var(--t4);line-height:1.95">
+      <dt>ratings.csv</dt><dd>full data, one row per album</dd>
+      <dt>ratings.json</dt><dd>same, structured</dd>
+      <dt>ratings.md</dt><dd>readable list grouped by score</dd>
+      <dt>dashboard.html</dt><dd>ranked page with covers</dd>
+      <dt>rym-queue.html</dt><dd>click-through RateYourMusic queue</dd>
+    </dl></div>
+  <div class="rowbtns"><a class="lnk" id="expGo">export now</a>
+    <a class="lnk" id="expDash" target="_blank">open dashboard</a>
+    <a class="lnk" id="expRym" target="_blank">open RYM queue</a>
+    <span class="lbl" id="expMsg"></span></div>
+  <div class="rowbtns" style="margin-top:20px"><a class="lnk" id="outClose">close</a></div>
+</div></div>
+
+<div class="ov" id="ovKeys"><div class="card">
+  <h3>keys.</h3><div class="cs">Everything is reachable from the keyboard.</div>
+  <div class="grp"><div class="hd lbl">rating.</div><div class="keys">
+    <kbd>1</kbd><span>½ star</span><kbd>2 to 9</kbd><span>1 through 4½, in half steps</span>
+    <kbd>0</kbd><span>5 stars</span><kbd>C</kbd><span>clear this rating</span>
+    <kbd>U</kbd><span>undo</span><kbd>R</kbd><span>redo</span></div></div>
+  <div class="grp"><div class="hd lbl">moving.</div><div class="keys">
+    <kbd>→</kbd> <span>next</span><kbd>←</kbd><span>previous</span>
+    <kbd>↓ ↑</kbd><span>jump ten</span><kbd>Space</kbd><span>next</span>
+    <kbd>Tab</kbd><span>next unrated</span><kbd>Shift T</kbd><span>random unrated</span></div></div>
+  <div class="grp"><div class="hd lbl">marking.</div><div class="keys">
+    <kbd>N</kbd><span>write a note</span><kbd>F</kbd><span>flag to revisit</span>
+    <kbd>S</kbd><span>skip, leave unrated</span><kbd>X</kbd><span>not an album, hide it</span>
+    <kbd>Enter</kbd><span>open on RateYourMusic</span><kbd>W</kbd><span>look up the artist</span>
+    <kbd>Y</kbd><span>copy artist and album</span></div></div>
+  <div class="grp"><div class="hd lbl">panels.</div><div class="keys">
+    <kbd>/</kbd><span>search</span><kbd>,</kbd><span>settings</span>
+    <kbd>G</kbd><span>save states</span><kbd>E</kbd><span>export</span>
+    <kbd>A</kbd><span>about</span><kbd>?</kbd><span>this list</span><kbd>Esc</kbd><span>close</span></div></div>
+  <div class="rowbtns"><a class="lnk" id="keysClose">close</a></div>
+</div></div>
+
+<div class="ov" id="ovAbout"><div class="card">
+  <h3>rate_my_library.</h3>
+  <div class="cs">Turns a listening history into a queue you can rate quickly, then hands you
+    an ordered list ready for RateYourMusic. It reads a Last.fm scrobble export or a Spotify
+    extended streaming history, merges the edition variants so each record appears once, and
+    ranks by how much you actually played it.</div>
+  <div class="grp"><div class="hd lbl">where things live.</div>
+    <dl class="kv" style="font-size:var(--t4);line-height:1.95">
+      <dt>your ratings</dt><dd>data/ratings.json</dd>
+      <dt>save states</dt><dd>data/snapshots/</dd>
+      <dt>exports</dt><dd>out/</dd>
+      <dt>covers</dt><dd>data/art/</dd>
+    </dl>
+    <div style="font-size:var(--t4);color:var(--dim);margin-top:11px;line-height:1.5">
+      Nothing leaves this machine. The app runs on localhost and talks to the outside world
+      only when it fetches cover art or looks something up on MusicBrainz.</div>
+  </div>
+  <div class="grp"><div class="hd lbl">source.</div>
+    <div style="font-size:var(--t4);line-height:1.6">
+      <a href="https://github.com/kenny-t-vo" target="_blank" rel="noopener">github.com/kenny-t-vo</a>
+    </div>
+  </div>
+  <div class="rowbtns"><a class="lnk" id="aboutClose">close</a></div>
+</div></div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const KEYMAP={"1":.5,"2":1,"3":1.5,"4":2,"5":2.5,"6":3,"7":3.5,"8":4,"9":4.5,"0":5};
+const SCALE=[.5,1,1.5,2,2.5,3,3.5,4,4.5,5];
+const KEYFOR={0.5:"1",1:"2",1.5:"3",2:"4",2.5:"5",3:"6",3.5:"7",4:"8",4.5:"9",5:"0"};
+
+let ALL=[], VIEW=[], R={}, CFG={}, i=0, rev=0, NOTEMAX=500;
+let undoS=[], redoS=[], byArtist=new Map();
+const sess={start:Date.now(), n:0};
+
+const nf=n=>n.toLocaleString();
+// plenty of these names are ordinary words (Duster, Grouper, Glare, Julie),
+// so the query carries a little context or the results are about dusting cloths
+const artistSearch=n=>"https://www.google.com/search?q="+encodeURIComponent(n+" music");
+const stars=v=>v?"★".repeat(Math.floor(v))+((v%1)?"½":""):"";
+const fdate=t=>t?new Date(t*1000).toLocaleDateString(undefined,{year:"numeric",month:"short"}):"";
+function toast(m,ms){clearTimeout(toast._t);const t=$("#toast");t.textContent=m;t.classList.add("on");
+  toast._t=setTimeout(()=>t.classList.remove("on"),ms||1500);}
+
+/* ── write queue: never lose a rating to a dropped request ───────── */
+const Q={pend:[],busy:false,fail:0};
+function push(op){Q.pend.push(op);paintSave();flush();}
+async function flush(){
+  if(Q.busy||!Q.pend.length)return;
+  Q.busy=true;
+  const batch=Q.pend.slice();
+  try{
+    const r=await fetch("/api/batch",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({items:batch})});
+    if(!r.ok)throw 0;
+    const j=await r.json();
+    if(typeof j.rev==="number")rev=j.rev;
+    Q.pend.splice(0,batch.length); Q.fail=0;
+  }catch(e){ Q.fail++; }
+  Q.busy=false; paintSave();
+  // back off only after a failure; a successful flush with more queued goes straight on
+  if(Q.pend.length) setTimeout(flush, Q.fail ? Math.min(8000,400*Math.pow(2,Math.min(Q.fail,5))) : 0);
+}
+function paintSave(){
+  const el=$("#save"), t=$("#saveT");
+  // two consecutive failures is enough to say so; leaving a calm blue dot while
+  // work sits unsent is the one lie this indicator must not tell
+  const down = Q.fail >= 2;
+  el.classList.toggle("pend", Q.pend.length>0 && !down);
+  el.classList.toggle("err", down);
+  t.textContent = down ? ("offline · "+Q.pend.length+" queued")
+                : Q.pend.length ? (Q.pend.length+" saving") : "saved";
+}
+addEventListener("beforeunload",e=>{if(Q.pend.length){e.preventDefault();e.returnValue="";}});
+
+/* ── boot ────────────────────────────────────────────────────────── */
+async function boot(){
+  const [a,s]=await Promise.all([fetch("/api/albums").then(r=>r.json()),
+                                 fetch("/api/state").then(r=>r.json())]);
+  ALL=a; R=s.ratings||{}; CFG=s.config||{}; rev=s.rev||0; NOTEMAX=s.noteMax||500;
+  byArtist=new Map();
+  ALL.forEach(x=>{const k=x.artist.toLowerCase();
+    if(!byArtist.has(k))byArtist.set(k,[]); byArtist.get(k).push(x);});
+  $("#sMin").max=Math.min(300,Math.max(...ALL.map(x=>x.plays)));
+  buildScale(); syncSettings(); bind(); apply(true);
+  setInterval(pollRev, 12000);
+}
+async function pollRev(){
+  try{const j=await fetch("/api/ping").then(r=>r.json());
+    if(j.rev>rev+Q.pend.length){ $("#bannerT").textContent=
+      "Ratings changed in another tab or process. Reload to see them.";
+      $("#banner").classList.add("on"); }
+  }catch(e){}
+}
+
+/* ── filtering / sorting ─────────────────────────────────────────── */
+function hash(s){let h=2166136261;for(let n=0;n<s.length;n++){h^=s.charCodeAt(n);h=Math.imul(h,16777619);}return h>>>0;}
+function apply(resume){
+  const cur=VIEW[i]&&VIEW[i].id;
+  VIEW=ALL.filter(a=>{const r=R[a.id]||{};
+    if(r.excluded)return false;
+    if(a.plays<CFG.minPlays||a.distinct_tracks<CFG.minTracks)return false;
+    if(CFG.show==="unrated"&&r.rating)return false;
+    if(CFG.show==="rated"&&!r.rating)return false;
+    if(CFG.show==="flagged"&&!r.flag)return false;
+    if(CFG.show==="noted"&&!r.note)return false;
+    return true;});
+  ({plays:()=>VIEW.sort((x,y)=>y.plays-x.plays),
+    spins:()=>VIEW.sort((x,y)=>y.spins-x.spins),
+    breadth:()=>VIEW.sort((x,y)=>y.distinct_tracks-x.distinct_tracks||y.plays-x.plays),
+    recent:()=>VIEW.sort((x,y)=>y.last-x.last),
+    discovered:()=>VIEW.sort((x,y)=>x.first-y.first),
+    artist:()=>VIEW.sort((x,y)=>x.artist.toLowerCase().localeCompare(y.artist.toLowerCase())||y.plays-x.plays),
+    random:()=>VIEW.sort((x,y)=>hash(x.id)-hash(y.id))}[CFG.sort]||(()=>{}))();
+  $("#sCount").textContent=VIEW.length+" albums match";
+  if(resume){const k=VIEW.findIndex(a=>!(R[a.id]||{}).rating); i=k<0?0:k;}
+  else if(cur){const k=VIEW.findIndex(a=>a.id===cur); if(k>=0)i=k;}
+  i=Math.max(0,Math.min(i,VIEW.length-1));
+  render(); buildStrip();
+}
+
+/* ── render ──────────────────────────────────────────────────────── */
+function buildScale(){
+  $("#scale").innerHTML=SCALE.map(v=>
+    `<div class="cell" data-v="${v}"><span class="k">${KEYFOR[v]}</span>
+     <span class="v">${v.toFixed(1)}</span></div>`).join("");
+  $$("#scale .cell").forEach(c=>c.onclick=()=>rate(+c.dataset.v));
+}
+function render(){
+  const empty=!VIEW.length;
+  $("#title").textContent = empty?"nothing matches":VIEW[i].album;
+  if(empty){
+    $("#artist").textContent=""; $("#artist").removeAttribute("href"); $("#tags").innerHTML=""; $("#tracks").innerHTML="";
+    $("#rym").innerHTML="";
+    $("#meta").innerHTML=""; $("#years").innerHTML=""; $("#calib").textContent=
+      "loosen the cutoff in settings to bring albums back.";
+    $("#coverImg").removeAttribute("src"); paintChrome(); return;
+  }
+  const a=VIEW[i], r=R[a.id]||{};
+
+  $("#pos").textContent=`${i+1} of ${VIEW.length}`;
+  $("#posAlt").textContent=`#${a.rank} by plays in library`;
+  const ar=$("#artist"); ar.textContent=a.artist; ar.href=artistSearch(a.artist);
+
+  const cov=$("#cover"), img=$("#coverImg");
+  cov.classList.toggle("none",!a.art);
+  if(a.art){ cov.classList.add("load");
+    img.onload=()=>cov.classList.remove("load");
+    img.onerror=()=>{cov.classList.add("none");cov.classList.remove("load");img.removeAttribute("src");};
+    img.src="/data/"+a.art;
+  } else img.removeAttribute("src");
+
+  const tags=[];
+  if(a.distinct_tracks<=2)tags.push(['warn','likely a single']);
+  if(r.flag)tags.push(['hot','flagged to revisit']);
+  if(r.skip)tags.push(['','skipped']);
+  if(a.variants&&a.variants.length)tags.push(['',a.variants.length+' editions merged']);
+  $("#tags").innerHTML=tags.map(([c,t])=>`<span class="tag ${c}">${t}</span>`).join("");
+
+  const direct=!!a.rym;
+  $("#rym").innerHTML=`<a href="${esc(direct?a.rym:a.rym_search)}" target="_blank" rel="noopener">`
+    +`rateyourmusic</a> <span class="lbl">${direct?"album page":"search"} · enter</span>`;
+
+  // artist calibration - what did I give this artist's other records?
+  const sib=(byArtist.get(a.artist.toLowerCase())||[])
+    .filter(x=>x.id!==a.id&&(R[x.id]||{}).rating)
+    .sort((x,y)=>(R[y.id].rating)-(R[x.id].rating));
+  $("#calib").innerHTML = sib.length
+    ? `you rated ${sib.length} other ${sib.length===1?"record":"records"} by ${esc(a.artist)}: `
+      + sib.slice(0,5).map(x=>`<b>${R[x.id].rating.toFixed(1)}</b> ${esc(x.album)}`).join(" · ")
+      + (sib.length>5?" and more":"")
+    : "";
+
+  const v=r.rating||0;
+  $("#stars").textContent=stars(v);
+  const rv=$("#rval"); rv.textContent=v?v.toFixed(1)+" of 5":"unrated"; rv.classList.toggle("un",!v);
+  $$("#scale .cell").forEach(c=>c.classList.toggle("on",+c.dataset.v===v));
+
+  const nb=$("#noteBox");
+  if(document.activeElement!==nb){ nb.value=r.note||""; }
+  nb.classList.toggle("has",!!(r.note));
+  countNote();
+
+  $("#lisSum").textContent=nf(a.plays)+" plays";
+  $("#meta").innerHTML=[
+    ["plays",nf(a.plays)],["album spins",a.spins.toFixed(1)],
+    ["tracks heard",a.distinct_tracks],["top track",a.top_track_plays+"×"],
+    ["first",fdate(a.first)],["last",fdate(a.last)],
+    ["artist total",nf(a.artist_plays)]
+  ].map(([k,val])=>`<dt>${k}</dt><dd>${esc(String(val))}</dd>`).join("");
+
+  const ys=a.years||{}, yk=Object.keys(ys).sort(), ym=Math.max(1,...Object.values(ys));
+  const peak=yk.find(y=>ys[y]===ym);
+  $("#ctxSum").textContent = yk.length>1 ? `peak ${peak} · ${yk.length} years` : "";
+  $("#ctx").style.visibility = yk.length>1 ? "visible" : "hidden";
+  $("#years").innerHTML=yk.map(y=>
+    `<div class="r${ys[y]===ym?" top":""}"><span>${y}</span><span>${ys[y]}</span>
+     <i style="width:${(100*ys[y]/ym).toFixed(1)}%"></i></div>`).join("");
+
+  const tm=a.tracks.length?a.tracks[0].plays:1;
+  $("#trkSum").textContent=a.distinct_tracks+" heard";
+  $("#tracks").innerHTML=a.tracks.map((t,n)=>
+    `<div class="trk${n===0?" top":""}"><span class="n">${n+1}</span>
+     <span class="t" title="${esc(t.name)}">${esc(t.name)}</span>
+     <span class="c">${t.plays}</span>
+     <i class="bar" style="width:calc((100% - 62px) * ${(t.plays/tm).toFixed(3)})"></i></div>`).join("");
+
+  paintChrome(); moveStrip();
+  for(let k=1;k<=8;k++){const nx=VIEW[i+k]; if(nx&&nx.art)(new Image()).src="/data/"+nx.art;}
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+function paintChrome(){
+  const all=Object.values(R), done=all.filter(x=>x.rating).length;
+  const inV=VIEW.filter(x=>(R[x.id]||{}).rating).length;
+  $("#hcount").textContent=`${nf(done)} / ${nf(VIEW.length)}`;
+  $("#prog i").style.width=(100*inV/Math.max(1,VIEW.length))+"%";
+  $("#stat").textContent=`${inV} rated in view · ${VIEW.length-inV} to go`;
+
+  const mins=(Date.now()-sess.start)/60000;
+  const rate=sess.n/Math.max(mins,.4);
+  const left=VIEW.length-inV;
+  $("#sessK").innerHTML=[
+    ["rated now",sess.n],["per minute",sess.n?rate.toFixed(1):""],
+    ["est. remaining",sess.n&&rate>.05?(left/rate<90?Math.round(left/rate)+" min":(left/rate/60).toFixed(1)+" hr"):""],
+    ["flagged",all.filter(x=>x.flag).length],
+    ["notes",all.filter(x=>x.note).length],
+    ["hidden",all.filter(x=>x.excluded).length]
+  ].map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("");
+
+  const d={}; all.forEach(x=>{if(x.rating)d[x.rating]=(d[x.rating]||0)+1;});
+  const mx=Math.max(1,...Object.values(d));
+  $("#distr").innerHTML=SCALE.slice().reverse().map(v=>{
+    const c=d[v]||0;
+    return `<div class="r"><span>${v.toFixed(1)}</span><span>${c||""}</span>
+     <i style="width:${c?(100*c/mx).toFixed(1):0}%"></i></div>`;}).join("");
+
+  $("#navQ").innerHTML=[
+    ["unrated","unrated"],["all","everything"],["rated","rated"],
+    ["flagged","flagged"],["noted","with notes"]
+  ].map(([k,t])=>{
+    const n=ALL.filter(a=>{const r=R[a.id]||{};
+      if(r.excluded)return false;
+      if(a.plays<CFG.minPlays||a.distinct_tracks<CFG.minTracks)return false;
+      return k==="all"?true:k==="unrated"?!r.rating:k==="rated"?!!r.rating:
+             k==="flagged"?!!r.flag:!!r.note;}).length;
+    return `<div><span class="t">~</span><a class="lnk${CFG.show===k?" on":""}"
+      data-show="${k}">${t}</a><kbd>${n}</kbd></div>`;}).join("");
+  $$("#navQ a").forEach(el=>el.onclick=()=>{CFG.show=el.dataset.show;saveCfg();syncSettings();apply(false);});
+}
+
+/* ── filmstrip ───────────────────────────────────────────────────── */
+function buildStrip(){
+  if(!CFG.showCarousel){$("#strip").style.display="none";return;}
+  $("#strip").style.display="";
+  $("#stripInner").innerHTML=VIEW.map((a,n)=>{
+    const r=R[a.id]||{};
+    return `<div class="th${r.rating?" rated":""}" data-n="${n}" data-r="${r.rating?r.rating.toFixed(1):""}"
+      title="${esc(a.artist)}: ${esc(a.album)}">${a.art?`<img loading="lazy" src="/data/${a.art}" alt="">`:""}</div>`;
+  }).join("");
+  $$("#stripInner .th").forEach(el=>el.onclick=()=>{i=+el.dataset.n;render();});
+  moveStrip();
+}
+function moveStrip(){
+  if(!CFG.showCarousel)return;
+  const inner=$("#stripInner"); if(!inner.children.length)return;
+  $$("#stripInner .th").forEach((el,n)=>el.classList.toggle("cur",n===i));
+  const W=52; // 46 + 6 gap
+  inner.style.transform=`translateX(${-(i*W)-23}px)`;
+}
+
+/* ── actions ─────────────────────────────────────────────────────── */
+function snapshot(id){const r=R[id]; return r?JSON.parse(JSON.stringify(r)):null;}
+function commit(id,prev,next,quiet){
+  undoS.push({id,prev}); redoS.length=0;
+  if(next===null){delete R[id]; push({id,clear:true});}
+  else {R[id]=next; push(Object.assign({id},next));}
+  if(!quiet)paintChrome();
+}
+function rate(v){
+  if(!VIEW.length)return;
+  const a=VIEW[i], prev=snapshot(a.id);
+  commit(a.id,prev,Object.assign({},R[a.id],{rating:v,skip:false}),true);
+  sess.n++;
+  $("#last").textContent=`${stars(v)} ${v.toFixed(1)} · ${a.album}`;
+  if(CFG.autoAdvance){
+    if(CFG.show==="unrated"||CFG.show==="flagged"||CFG.show==="noted"){apply(false);}
+    else next(true);
+  } else render();
+  markStrip(a.id,v);
+}
+function markStrip(id,v){
+  if(!CFG.showCarousel)return;
+  const n=VIEW.findIndex(x=>x.id===id); if(n<0)return;
+  const el=$$("#stripInner .th")[n]; if(!el)return;
+  el.classList.add("rated"); el.dataset.r=v.toFixed(1);
+}
+function next(silent){ if(i<VIEW.length-1){i++;render();} else {render(); if(!silent)toast("end of queue");} }
+function prev(){ if(i>0){i--;render();} }
+function undo(){
+  const h=undoS.pop(); if(!h){toast("nothing to undo");return;}
+  redoS.push({id:h.id,prev:snapshot(h.id)});
+  if(h.prev){R[h.id]=h.prev; push(Object.assign({id:h.id},h.prev));}
+  else {delete R[h.id]; push({id:h.id,clear:true});}
+  apply(false);
+  const k=VIEW.findIndex(a=>a.id===h.id); if(k>=0)i=k;
+  render(); buildStrip(); toast("undone");
+}
+function redo(){
+  const h=redoS.pop(); if(!h){toast("nothing to redo");return;}
+  undoS.push({id:h.id,prev:snapshot(h.id)});
+  if(h.prev){R[h.id]=h.prev; push(Object.assign({id:h.id},h.prev));}
+  else {delete R[h.id]; push({id:h.id,clear:true});}
+  apply(false);
+  const k=VIEW.findIndex(a=>a.id===h.id); if(k>=0)i=k;
+  render(); buildStrip(); toast("redone");
+}
+function toggleFlag(){ if(!VIEW.length)return; const a=VIEW[i], r=R[a.id]||{};
+  commit(a.id,snapshot(a.id),Object.assign({},r,{flag:!r.flag}));
+  render(); toast(r.flag?"unflagged":"flagged to revisit"); }
+function skip(){ if(!VIEW.length)return; const a=VIEW[i];
+  commit(a.id,snapshot(a.id),Object.assign({},R[a.id],{skip:true}),true); next(); }
+function exclude(){
+  if(!VIEW.length)return; const a=VIEW[i];
+  if(CFG.confirmExclude&&!confirm(`Hide “${a.album}” from the queue?`))return;
+  commit(a.id,snapshot(a.id),Object.assign({},R[a.id],{excluded:true}),true);
+  apply(false); buildStrip(); toast("hidden · U to undo");
+}
+function clearRating(){ if(!VIEW.length)return; const a=VIEW[i];
+  commit(a.id,snapshot(a.id),null); render(); buildStrip(); toast("cleared"); }
+function jumpUnrated(){const k=VIEW.findIndex((a,n)=>n>i&&!(R[a.id]||{}).rating);
+  const j=k<0?VIEW.findIndex(a=>!(R[a.id]||{}).rating):k;
+  if(j<0){toast("everything here is rated");return;} i=j; render();}
+function randomUnrated(){const c=VIEW.map((a,n)=>[a,n]).filter(([a])=>!(R[a.id]||{}).rating);
+  if(!c.length){toast("everything here is rated");return;}
+  i=c[Math.floor(Math.random()*c.length)][1]; render();}
+function openRym(){ if(!VIEW.length)return; const a=VIEW[i];
+  window.open(a.rym||a.rym_search,"_blank","noopener"); }
+function openArtist(){ if(!VIEW.length)return;
+  window.open(artistSearch(VIEW[i].artist),"_blank","noopener"); }
+function copyName(){ if(!VIEW.length)return; const a=VIEW[i];
+  const s=`${a.artist} - ${a.album}`;
+  (navigator.clipboard?navigator.clipboard.writeText(s):Promise.reject())
+    .then(()=>toast("copied · "+s)).catch(()=>toast("copy blocked by the browser")); }
+
+/* ── notes ───────────────────────────────────────────────────────── */
+function countNote(){
+  const n=$("#noteBox").value.length, el=$("#noteCount");
+  el.textContent=n+" / "+NOTEMAX; el.classList.toggle("over",n>=NOTEMAX);
+}
+function saveNote(){
+  if(!VIEW.length)return;
+  const a=VIEW[i], t=$("#noteBox").value.slice(0,NOTEMAX).trim();
+  const cur=(R[a.id]||{}).note||"";
+  if(t===cur)return;
+  commit(a.id,snapshot(a.id),Object.assign({},R[a.id],{note:t}));
+  $("#noteBox").classList.toggle("has",!!t);
+}
+
+/* ── settings / config ───────────────────────────────────────────── */
+function saveCfg(){ fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify(CFG)}).catch(()=>{}); }
+function syncSettings(){
+  $("#sMin").value=CFG.minPlays; $("#oMin").textContent=CFG.minPlays;
+  $("#sTrk").value=CFG.minTracks; $("#oTrk").textContent=CFG.minTracks;
+  $("#sSort").value=CFG.sort; $("#sShow").value=CFG.show;
+  [["tAdv","autoAdvance"],["tCar","showCarousel"],["tConf","confirmExclude"]]
+    .forEach(([el,k])=>{const e=$("#"+el); e.classList.toggle("on",!!CFG[k]);
+      e.textContent=CFG[k]?"on":"off";});
+}
+
+/* ── snapshots ───────────────────────────────────────────────────── */
+async function loadSnaps(){
+  const j=await fetch("/api/snapshots").then(r=>r.json()).catch(()=>({snapshots:[]}));
+  $("#snapList").innerHTML=(j.snapshots||[]).map(s=>
+    `<div class="snap"><span>${esc(s.name)}</span>
+      <span class="m">${s.kind}</span>
+      <span class="m">${s.rated} rated</span>
+      <span class="m">${new Date(s.ts*1000).toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
+      <a class="lnk" data-rs="${esc(s.file)}">restore</a></div>`).join("")
+    || '<div class="lbl">no save states yet</div>';
+  $$("#snapList a[data-rs]").forEach(el=>el.onclick=async()=>{
+    if(!confirm("Restore this save state? Your current ratings are snapshotted first."))return;
+    const j=await fetch("/api/snapshots/restore",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({file:el.dataset.rs})})
+      .then(r=>r.json());
+    if(j.ok){R=j.ratings;rev=j.rev;undoS=[];redoS=[];apply(false);buildStrip();
+      closeAll();toast("restored");} else toast("restore failed");
+  });
+}
+
+/* ── overlays ────────────────────────────────────────────────────── */
+const anyOv=()=>!!$(".ov.on");
+function closeAll(){$$(".ov").forEach(o=>o.classList.remove("on"));}
+function openOv(id){closeAll();$("#"+id).classList.add("on");
+  if(id==="ovSnap")loadSnaps();
+  if(id==="ovFind"){$("#findI").value="";find("");$("#findI").focus();}}
+
+function find(q){
+  q=q.trim().toLowerCase();
+  const el=$("#findR");
+  if(!q){el.innerHTML="";return;}
+  const hits=ALL.filter(a=>(a.artist+" "+a.album).toLowerCase().includes(q))
+    .sort((x,y)=>y.plays-x.plays).slice(0,40);
+  el.innerHTML=hits.map(a=>{const r=R[a.id]||{};
+    return `<div class="ri" data-id="${a.id}">
+      <img loading="lazy" src="${a.art?"/data/"+a.art:""}" alt="">
+      <div><div class="a">${esc(a.album)}</div><div class="b">${esc(a.artist)}</div></div>
+      <div class="c">${nf(a.plays)} plays${r.rating?" · "+r.rating.toFixed(1):""}</div></div>`;
+  }).join("")||'<div class="lbl" style="padding:12px 4px">no match</div>';
+  $$("#findR .ri").forEach(e=>e.onclick=()=>goto(e.dataset.id));
+}
+function goto(id){
+  let k=VIEW.findIndex(a=>a.id===id);
+  if(k<0){const a=ALL.find(x=>x.id===id);
+    if(a){CFG.minPlays=Math.min(CFG.minPlays,a.plays);
+      CFG.minTracks=Math.min(CFG.minTracks,a.distinct_tracks);CFG.show="all";
+      saveCfg();syncSettings();apply(false);buildStrip();
+      k=VIEW.findIndex(x=>x.id===id);toast("filters relaxed to reach it");}}
+  if(k>=0){i=k;closeAll();render();}
+}
+
+/* ── binding ─────────────────────────────────────────────────────── */
+function bind(){
+  $$("nav .lnk").forEach(el=>el.onclick=()=>openOv(el.dataset.ov));
+  $$(".ov").forEach(o=>o.onclick=e=>{if(e.target===o)closeAll();});
+  ["setClose","snapClose","outClose","keysClose","aboutClose"].forEach(id=>$("#"+id).onclick=closeAll);
+
+  $("#findI").oninput=e=>find(e.target.value);
+  $("#findI").onkeydown=e=>{if(e.key==="Enter"){const f=$("#findR .ri");if(f)goto(f.dataset.id);}};
+
+  const upd=()=>{CFG.minPlays=+$("#sMin").value;CFG.minTracks=+$("#sTrk").value;
+    CFG.sort=$("#sSort").value;CFG.show=$("#sShow").value;
+    saveCfg();syncSettings();apply(false);buildStrip();};
+  ["sMin","sTrk"].forEach(id=>$("#"+id).oninput=upd);
+  ["sSort","sShow"].forEach(id=>$("#"+id).onchange=upd);
+  [["tAdv","autoAdvance"],["tCar","showCarousel"],["tConf","confirmExclude"]]
+    .forEach(([el,k])=>$("#"+el).onclick=()=>{CFG[k]=!CFG[k];saveCfg();syncSettings();
+      if(k==="showCarousel")buildStrip();});
+
+  const nb=$("#noteBox");
+  nb.oninput=countNote;
+  nb.onfocus=()=>{$("#noteWrap").classList.add("editing");countNote();};
+  nb.onblur=()=>{$("#noteWrap").classList.remove("editing");saveNote();};
+  nb.onkeydown=e=>{
+    if(e.key==="Escape"||(e.key==="Enter"&&(e.metaKey||e.ctrlKey))){e.preventDefault();
+      saveNote();nb.blur();}
+    e.stopPropagation();
+  };
+
+  $("#snapGo").onclick=async()=>{
+    const name=$("#snapName").value.trim()||"manual save";
+    await fetch("/api/snapshots",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name})});
+    $("#snapName").value=""; loadSnaps(); toast("save state written");
+  };
+  $("#expGo").onclick=async()=>{
+    $("#expMsg").textContent="writing";
+    const j=await fetch("/api/export").then(r=>r.json()).catch(()=>null);
+    $("#expMsg").textContent=j&&j.ok?`${j.rows} ratings written to out/`:"export failed";
+  };
+  $("#expDash").href="/out/dashboard.html"; $("#expRym").href="/out/rym-queue.html";
+  const IMPNOTE={
+    auto:"",
+    lastfm:"Export yours at benjaminbenben.com/lastfm-to-csv. Last.fm data carries MusicBrainz "+
+          "ids, so it gets the best cover art and the most direct RateYourMusic links.",
+    spotify:"Request this from Spotify under Privacy Settings, \u201cExtended streaming history\u201d. "+
+          "It is emailed to you and can take several days to a few weeks to arrive, so start the "+
+          "request before you need it. The short \u201cAccount data\u201d download will not work: "+
+          "it has no album names. Spotify records how long each track played, so plays under 30 "+
+          "seconds are dropped as skips. It carries no MusicBrainz ids, so run "+
+          "build.py --mbids afterwards to restore cover art and RateYourMusic links."};
+  const impNote=()=>{$("#impNote").textContent=IMPNOTE[$("#impSrc").value]||"";
+    $("#impPath").placeholder=$("#impSrc").value==="spotify"
+      ? "~/Downloads/my_spotify_data.zip" : "~/Downloads/scrobbles-name-0000.csv";};
+  $("#impSrc").onchange=impNote; impNote();
+  $("#impGo").onclick=async()=>{
+    const p=$("#impPath").value.trim();
+    if(!p){toast("paste the path to your export");return;}
+    $("#impMsg").textContent="rebuilding";
+    const j=await fetch("/api/import",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({path:p,source:$("#impSrc").value})}).then(r=>r.json()).catch(()=>null);
+    $("#impMsg").textContent=j&&j.ok?"rebuilding, reload in a moment":(j&&j.err)||"failed";
+  };
+  $("#bannerR").onclick=e=>{e.preventDefault();location.reload();};
+
+  document.addEventListener("keydown",e=>{
+    if(e.key==="Escape"){ if(anyOv()){closeAll();return;} }
+    const ae=document.activeElement;
+    if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;
+    if(e.metaKey||e.ctrlKey||e.altKey)return;
+    if(anyOv()&&e.key!=="?")return;
+    if(e.repeat&&(e.key in KEYMAP))return;
+    if(e.key in KEYMAP){e.preventDefault();rate(KEYMAP[e.key]);return;}
+    const k=e.key.toLowerCase();
+    if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();jumpUnrated();return;}
+    if(e.key==="T"){randomUnrated();return;}
+    switch(k){
+      case "arrowright":case " ":e.preventDefault();next();break;
+      case "arrowleft":e.preventDefault();prev();break;
+      case "arrowdown":e.preventDefault();i=Math.min(VIEW.length-1,i+10);render();break;
+      case "arrowup":e.preventDefault();i=Math.max(0,i-10);render();break;
+      case "u":case "backspace":e.preventDefault();undo();break;
+      case "r":redo();break;
+      case "c":clearRating();break;
+      case "s":skip();break;
+      case "x":exclude();break;
+      case "f":toggleFlag();break;
+      case "y":copyName();break;
+      case "w":openArtist();break;
+      case "enter":openRym();break;
+      case "n":e.preventDefault();$("#noteBox").focus();break;
+      case "/":e.preventDefault();openOv("ovFind");break;
+      case ",":openOv("ovSet");break;
+      case "g":openOv("ovSnap");break;
+      case "e":openOv("ovOut");break;
+      case "?":closeAll();openOv("ovKeys");break;
+    }
+  });
+}
+boot();
+</script></body></html>
