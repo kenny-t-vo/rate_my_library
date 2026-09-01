@@ -1,4 +1,4 @@
-# rate_my_library
+# rate_my_library.
 
 Rate your albums fast from your listening history, then carry the ratings over to
 RateYourMusic. Python standard library plus one HTML file. Nothing to install, and
