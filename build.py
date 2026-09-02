@@ -41,9 +41,8 @@ def strip_edition(title):
     return s if s.strip() else title
 
 def fold_accents(s):
-    """Strip Latin diacritics (Cafe/Cafe) but leave CJK marks alone -
-    naively stripping every combining mark would turn Japanese dakuten into
-    the wrong kana."""
+    """Strip Latin diacritics (Cafe/Cafe) but leave CJK marks alone; stripping
+    every combining mark turns Japanese dakuten into the wrong kana."""
     out = []
     for ch in unicodedata.normalize("NFD", s):
         if unicodedata.combining(ch):
@@ -59,7 +58,7 @@ def norm_key(s):
 
     NOTE: album ids - and therefore saved ratings - are md5(norm_key(artist)|
     norm_key(album)). Changing this function renames every id and orphans
-    existing ratings, so do not touch it casually.
+    existing ratings.
     """
     orig = s
     s = fold_accents(s).lower()
@@ -103,8 +102,8 @@ def _iso_to_epoch(t):
     return 0
 
 def read_lastfm_csv(path, **kw):
-    """Last.fm scrobble export. Carries MusicBrainz ids, which is why its cover
-    art and RateYourMusic coverage are the best of the three sources."""
+    """Last.fm scrobble export. Carries MusicBrainz ids, so its cover art and
+    RateYourMusic coverage are the best of the three sources."""
     with open(path, newline="", encoding="utf-8") as f:
         for d in csv.DictReader(f):
             artist = (d.get("artist") or "").strip()
@@ -163,8 +162,7 @@ def read_spotify_history(path, min_ms=SPOTIFY_MIN_MS, **kw):
     up through a list of aliases. The short 'Account data' export is rejected
     by the caller because it carries no album name at all.
 
-    ms_played lets us drop skips, which Last.fm cannot do: a track abandoned
-    after four seconds is not a play.
+    ms_played allows dropping skips, which Last.fm exports cannot.
     """
     TRACK  = ("master_metadata_track_name", "trackName", "track_name")
     ARTIST = ("master_metadata_album_artist_name", "artistName", "artist_name")
@@ -305,7 +303,7 @@ def _get(url, timeout=20):
         return r.read(), r.headers.get("Content-Type", "")
 
 def _mk(s):
-    """Comparison key for verifying a search result really is the album we asked for."""
+    """Comparison key for verifying a search result matches the requested album."""
     s = fold_accents(s).lower()
     s = s.replace("&", "and")
     s = re.sub(r"[^a-z0-9\s]", " ", s)
@@ -426,11 +424,10 @@ def fetch_all_art(albums, workers=6, force=False):
 def enrich_mbids(albums, limit=None, sleep=1.1):
     """Look up MusicBrainz ids for albums that arrived without them.
 
-    Spotify exports carry no MusicBrainz ids at all, which would leave those
-    libraries with no Cover Art Archive covers and no direct RateYourMusic
-    links. One search per album at MusicBrainz's 1/sec limit, verified against
-    artist and title before it is accepted, and checkpointed so it can be
-    stopped and resumed.
+    Spotify exports carry no MusicBrainz ids, so those libraries get no Cover
+    Art Archive covers and no direct RateYourMusic links. One search per album
+    at MusicBrainz's 1/sec limit, verified against artist and title, and
+    checkpointed so it can be stopped and resumed.
     """
     todo = [a for a in albums if not a.get("mbid") and not a.get("rgid")]
     if limit:
@@ -523,7 +520,7 @@ def resolve_rym(albums, limit=None, sleep=1.2):
 # ---------------------------------------------------------------- io
 
 def reindex_art(albums):
-    """Self-healing: derive the art field from what is actually on disk."""
+    """Derive the art field from what is on disk."""
     n = 0
     for a in albums:
         p = os.path.join(ART, a["id"] + ".jpg")

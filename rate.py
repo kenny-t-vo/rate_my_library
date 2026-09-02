@@ -2,7 +2,7 @@
 """
 rate.py - local rating server for rate_my_library.
 
-Persistence is three layers deep:
+Persistence has three layers:
   data/ratings.json    live state, rewritten atomically on every change
   data/history.jsonl   append-only log of every change (audit + recovery)
   data/snapshots/      named + automatic save states; restore is itself undoable
@@ -113,7 +113,7 @@ def snap_create(name, kind="manual"):
         "rated": len([v for v in r.values() if v.get("rating")]),
         "ratings": r,
     })
-    # prune automatic snapshots only; manual ones are the user's to delete
+    # prune automatic snapshots only; manual ones are deleted by hand
     autos = sorted([p for p in glob.glob(os.path.join(SNAPS, "*-auto-*.json"))], reverse=True)
     for p in autos[SNAP_KEEP:]:
         try: os.remove(p)
