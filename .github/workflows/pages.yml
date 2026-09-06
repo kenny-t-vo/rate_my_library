@@ -26,6 +26,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+
+      # Pages serves assets with max-age=600, so for ten minutes after a deploy
+      # a returning browser can pair the new index.html with the app.js it
+      # already had. That mix throws on the first element one version has and
+      # the other does not, and the render dies there — half the page blank.
+      # Stamping the commit onto every local reference means a given html can
+      # only ever load the js it shipped with.
+      - name: Version asset urls
+        run: |
+          v=${GITHUB_SHA::12}
+          sed -i "s|href=\"style.css\"|href=\"style.css?v=$v\"|; s|src=\"app.js\"|src=\"app.js?v=$v\"|" web/index.html
+          sed -i -E "s|from \"(\./[A-Za-z0-9_/.-]+\.js)\"|from \"\1?v=$v\"|g" web/app.js web/lib/*.js
+          grep -o 'style.css?v=[0-9a-f]*\|app.js?v=[0-9a-f]*' web/index.html
+          grep -oh 'from "\./[^"]*"' web/app.js web/lib/*.js
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
