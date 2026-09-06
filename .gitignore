@@ -11,3 +11,4 @@ out/
 __pycache__/
 .DS_Store
 data/enrich.sh
+web/_test_*

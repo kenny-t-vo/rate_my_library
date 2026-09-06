@@ -620,8 +620,18 @@ def remerge(albums, ratings_path=None):
 
     for key, members in groups.items():
         members.sort(key=lambda x: -x["plays"])
+        gid = hashlib.md5(("%s|%s" % key).encode("utf-8")).hexdigest()[:12]
         if len(members) == 1:
-            out.append(members[0]); continue
+            # normalisation can change a key without collapsing a group, and the
+            # stored id then no longer matches its own text
+            solo = members[0]
+            if solo["id"] != gid:
+                remap[solo["id"]] = gid
+                rec = ratings.pop(solo["id"], None)
+                if rec:
+                    ratings[gid] = rec
+                solo["id"] = gid
+            out.append(solo); continue
         head = dict(members[0])
         head["plays"] = sum(m["plays"] for m in members)
 
@@ -654,7 +664,7 @@ def remerge(albums, ratings_path=None):
                     seen.add(v); variants.append(v)
         head["album"] = strip_edition(members[0]["album"])
         head["variants"] = variants
-        head["id"] = hashlib.md5(("%s|%s" % key).encode("utf-8")).hexdigest()[:12]
+        head["id"] = gid
 
         # ratings: highest-play side wins, the rest are folded into its note
         rated = [(m, ratings.get(m["id"])) for m in members]
