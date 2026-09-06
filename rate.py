@@ -33,6 +33,7 @@ _albums_cache = [None, 0.0]
 DEFAULT_CONFIG = {
     "minPlays": 15, "minTracks": 3, "sort": "plays", "show": "all",
     "autoAdvance": True, "showCarousel": True, "confirmExclude": False,
+    "listenOn": "spotify", "fullTracklist": True,
 }
 
 # ------------------------------------------------------------------ storage

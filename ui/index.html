@@ -142,6 +142,10 @@ h2 a{text-underline-offset:3px}
 .trk .t{font-size:var(--t4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trk .c{font:var(--t5)/1.5 var(--mono);color:var(--dim)}
 .trk.top .t{color:var(--blue)}
+.trk.unheard{opacity:.42}
+.trk.unheard .n{color:var(--faint)}
+.trk .t a{color:inherit;text-decoration:none}
+.trk .t a:hover{color:var(--blue);text-decoration:underline;text-underline-offset:2px}
 .trk .bar{position:absolute;left:27px;bottom:0;height:1.5px;background:var(--blue);opacity:.35}
 
 /* ══ carousel ════════════════════════════════════════════════════════ */
@@ -359,6 +363,13 @@ select:focus,input[type=text]:focus{border-color:var(--blue)}
     <div class="opt"><label>advance after rating</label><span class="lbl">move to the next album automatically</span><span class="tog" id="tAdv">on</span></div>
     <div class="opt"><label>cover filmstrip</label><span class="lbl">show the queue along the bottom</span><span class="tog" id="tCar">on</span></div>
     <div class="opt"><label>confirm hiding</label><span class="lbl">ask before “not an album”</span><span class="tog" id="tConf">off</span></div>
+    <div class="opt"><label>whole tracklist</label><span class="lbl">show songs you have never played, in album order</span><span class="tog" id="tFull">on</span></div>
+    <div class="opt"><label>listen links</label><select id="sListen">
+      <option value="spotify">Spotify</option>
+      <option value="apple">Apple Music</option>
+      <option value="youtube">YouTube Music</option>
+      <option value="google">Google</option>
+      <option value="">off</option></select><span></span></div>
   </div>
   <div class="grp"><div class="hd lbl">library.</div>
     <div class="opt"><label>source</label><select id="impSrc">
@@ -371,6 +382,10 @@ select:focus,input[type=text]:focus{border-color:var(--blue)}
     <div class="rowbtns"><a class="lnk" id="impGo">import and rebuild</a>
       <span class="lbl" id="impMsg"></span></div>
     <div id="impNote" style="font-size:var(--t4);color:var(--dim);line-height:1.55;margin-top:12px"></div>
+    <div style="font-size:var(--t4);color:var(--dim);line-height:1.55;margin-top:10px">
+      Your ratings and notes carry over. They are keyed by artist and album, not by
+      position in the file, so a newer export of the same library keeps every score.
+      A save state is written before the rebuild either way.</div>
   </div>
   <div class="rowbtns"><a class="lnk" id="setClose">close</a></div>
 </div></div>
@@ -418,6 +433,7 @@ select:focus,input[type=text]:focus{border-color:var(--blue)}
     <kbd>N</kbd><span>write a note</span><kbd>F</kbd><span>flag to revisit</span>
     <kbd>S</kbd><span>skip, leave unrated</span><kbd>X</kbd><span>not an album, hide it</span>
     <kbd>Enter</kbd><span>open on RateYourMusic</span><kbd>W</kbd><span>look up the artist</span>
+    <kbd>L</kbd><span>open the album on Spotify or your chosen service</span>
     <kbd>Y</kbd><span>copy artist and album</span></div></div>
   <div class="grp"><div class="hd lbl">panels.</div><div class="keys">
     <kbd>/</kbd><span>search</span><kbd>,</kbd><span>settings</span>
@@ -468,6 +484,15 @@ const nf=n=>n.toLocaleString();
 // plenty of these names are ordinary words (Duster, Grouper, Glare, Julie),
 // so the query carries a little context or the results are about dusting cloths
 const artistSearch=n=>"https://www.google.com/search?q="+encodeURIComponent(n+" music");
+// no reliable streaming ids in the data, so these are searches. one click from
+// the album or track page on whichever service you use.
+const SERVICES={
+  spotify:{label:"spotify", url:q=>"https://open.spotify.com/search/"+encodeURIComponent(q)},
+  apple:  {label:"apple music", url:q=>"https://music.apple.com/search?term="+encodeURIComponent(q)},
+  youtube:{label:"youtube", url:q=>"https://music.youtube.com/search?q="+encodeURIComponent(q)},
+  google: {label:"google", url:q=>"https://www.google.com/search?q="+encodeURIComponent(q)}};
+const listen=q=>{const sv=SERVICES[CFG.listenOn]; return sv?sv.url(q):null;};
+const ntrk=s=>s.toLowerCase().normalize("NFKD").replace(/[^\w\s]/g," ").replace(/\s+/g," ").trim();
 const stars=v=>v?"★".repeat(Math.floor(v))+((v%1)?"½":""):"";
 const fdate=t=>t?new Date(t*1000).toLocaleDateString(undefined,{year:"numeric",month:"short"}):"";
 function toast(m,ms){clearTimeout(toast._t);const t=$("#toast");t.textContent=m;t.classList.add("on");
@@ -589,8 +614,11 @@ function render(){
   $("#tags").innerHTML=tags.map(([c,t])=>`<span class="tag ${c}">${t}</span>`).join("");
 
   const direct=!!a.rym;
+  const lu=listen(`${a.artist} ${a.album}`), sv=SERVICES[CFG.listenOn];
   $("#rym").innerHTML=`<a href="${esc(direct?a.rym:a.rym_search)}" target="_blank" rel="noopener">`
-    +`rateyourmusic</a> <span class="lbl">${direct?"album page":"search"} · enter</span>`;
+    +`rateyourmusic</a> <span class="lbl">${direct?"album page":"search"} · enter</span>`
+    +(lu?` <a href="${esc(lu)}" target="_blank" rel="noopener" style="margin-left:14px">`
+        +`${esc(sv.label)}</a> <span class="lbl">L</span>`:"");
 
   // artist calibration - what did I give this artist's other records?
   const sib=(byArtist.get(a.artist.toLowerCase())||[])
@@ -614,7 +642,7 @@ function render(){
 
   $("#lisSum").textContent=nf(a.plays)+" plays";
   $("#meta").innerHTML=[
-    ["plays",nf(a.plays)],["album spins",a.spins.toFixed(1)],
+    ["plays",nf(a.plays)],["album spins",a.spins.toFixed(1)+(a.spins_basis==="heard"?" ~":"")],
     ["tracks heard",a.distinct_tracks],["top track",a.top_track_plays+"×"],
     ["first",fdate(a.first)],["last",fdate(a.last)],
     ["artist total",nf(a.artist_plays)]
@@ -628,13 +656,30 @@ function render(){
     `<div class="r${ys[y]===ym?" top":""}"><span>${y}</span><span>${ys[y]}</span>
      <i style="width:${(100*ys[y]/ym).toFixed(1)}%"></i></div>`).join("");
 
-  const tm=a.tracks.length?a.tracks[0].plays:1;
-  $("#trkSum").textContent=a.distinct_tracks+" heard";
-  $("#tracks").innerHTML=a.tracks.map((t,n)=>
-    `<div class="trk${n===0?" top":""}"><span class="n">${n+1}</span>
-     <span class="t" title="${esc(t.name)}">${esc(t.name)}</span>
-     <span class="c">${t.plays}</span>
-     <i class="bar" style="width:calc((100% - 62px) * ${(t.plays/tm).toFixed(3)})"></i></div>`).join("");
+  const heard=new Map(a.tracks.map(t=>[ntrk(t.name),t.plays]));
+  const full=CFG.fullTracklist&&a.full_tracks&&a.full_tracks.length?a.full_tracks:null;
+  let rows;
+  if(full){
+    const used=new Set();
+    rows=full.map(ft=>{const k=ntrk(ft.name),p=heard.get(k)||0; if(p)used.add(k);
+      return {n:ft.n,name:ft.name,plays:p};});
+    // anything played that is not on this pressing: bonus tracks, other edition
+    a.tracks.forEach(t=>{if(!used.has(ntrk(t.name)))rows.push({n:null,name:t.name,plays:t.plays});});
+  } else rows=a.tracks.map((t,k)=>({n:k+1,name:t.name,plays:t.plays}));
+  const tm=Math.max(1,...rows.map(r=>r.plays));
+  const topName=a.tracks.length?ntrk(a.tracks[0].name):null;
+  $("#trkSum").textContent = a.total_tracks
+    ? `${a.distinct_tracks} of ${a.total_tracks} heard` : `${a.distinct_tracks} heard`;
+  $("#tracks").innerHTML=rows.map(r=>{
+    const u=r.plays===0, url=listen(`${a.artist} ${r.name}`);
+    const name=url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(r.name)}</a>`
+                  :esc(r.name);
+    return `<div class="trk${ntrk(r.name)===topName&&!u?" top":""}${u?" unheard":""}">
+     <span class="n">${r.n==null?"·":r.n}</span>
+     <span class="t" title="${esc(r.name)}">${name}</span>
+     <span class="c">${u?"":r.plays}</span>
+     ${u?"":`<i class="bar" style="width:calc((100% - 62px) * ${(r.plays/tm).toFixed(3)})"></i>`}
+     </div>`;}).join("");
 
   paintChrome(); moveStrip();
   for(let k=1;k<=8;k++){const nx=VIEW[i+k]; if(nx&&nx.art)(new Image()).src="/data/"+nx.art;}
@@ -694,10 +739,19 @@ function buildStrip(){
 }
 function moveStrip(){
   if(!CFG.showCarousel)return;
-  const inner=$("#stripInner"); if(!inner.children.length)return;
-  $$("#stripInner .th").forEach((el,n)=>el.classList.toggle("cur",n===i));
-  const W=52; // 46 + 6 gap
-  inner.style.transform=`translateX(${-(i*W)-23}px)`;
+  const inner=$("#stripInner"), kids=inner.children, n=kids.length;
+  if(!n)return;
+  [...kids].forEach((el,k)=>el.classList.toggle("cur",k===i));
+  // measured, not hardcoded: a thumbnail size change in the CSS used to leave
+  // this constant stale and the strip drifted a few px per item
+  const pitch = n>1 ? kids[1].offsetLeft-kids[0].offsetLeft
+                    : kids[0].offsetWidth+6;
+  const half=$("#strip").clientWidth/2, total=n*pitch;
+  let x=-(i*pitch+pitch/2);
+  // clamp at both ends so a short list, or the first and last few items, never
+  // sit against dead space
+  x = total<=half*2 ? -total/2 : Math.min(-half, Math.max(half-total, x));
+  inner.style.transform=`translateX(${x}px)`;
 }
 
 /* ── actions ─────────────────────────────────────────────────────── */
@@ -795,9 +849,11 @@ function syncSettings(){
   $("#sMin").value=CFG.minPlays; $("#oMin").textContent=CFG.minPlays;
   $("#sTrk").value=CFG.minTracks; $("#oTrk").textContent=CFG.minTracks;
   $("#sSort").value=CFG.sort; $("#sShow").value=CFG.show;
-  [["tAdv","autoAdvance"],["tCar","showCarousel"],["tConf","confirmExclude"]]
-    .forEach(([el,k])=>{const e=$("#"+el); e.classList.toggle("on",!!CFG[k]);
-      e.textContent=CFG[k]?"on":"off";});
+  [["tAdv","autoAdvance"],["tCar","showCarousel"],["tConf","confirmExclude"],
+   ["tFull","fullTracklist"]]
+    .forEach(([el,k])=>{const e=$("#"+el); if(!e)return;
+      e.classList.toggle("on",!!CFG[k]); e.textContent=CFG[k]?"on":"off";});
+  if($("#sListen"))$("#sListen").value=CFG.listenOn||"";
 }
 
 /* ── snapshots ───────────────────────────────────────────────────── */
@@ -865,9 +921,11 @@ function bind(){
     saveCfg();syncSettings();apply(false);buildStrip();};
   ["sMin","sTrk"].forEach(id=>$("#"+id).oninput=upd);
   ["sSort","sShow"].forEach(id=>$("#"+id).onchange=upd);
-  [["tAdv","autoAdvance"],["tCar","showCarousel"],["tConf","confirmExclude"]]
-    .forEach(([el,k])=>$("#"+el).onclick=()=>{CFG[k]=!CFG[k];saveCfg();syncSettings();
-      if(k==="showCarousel")buildStrip();});
+  [["tAdv","autoAdvance"],["tCar","showCarousel"],["tConf","confirmExclude"],
+   ["tFull","fullTracklist"]]
+    .forEach(([el,k])=>{const e=$("#"+el); if(!e)return; e.onclick=()=>{CFG[k]=!CFG[k];saveCfg();syncSettings();
+      if(k==="showCarousel")buildStrip(); else render();};});
+  if($("#sListen"))$("#sListen").onchange=()=>{CFG.listenOn=$("#sListen").value;saveCfg();render();};
 
   const nb=$("#noteBox");
   nb.oninput=countNote;
@@ -939,6 +997,8 @@ function bind(){
       case "f":toggleFlag();break;
       case "y":copyName();break;
       case "w":openArtist();break;
+      case "l":{if(!VIEW.length)break;const u=listen(`${VIEW[i].artist} ${VIEW[i].album}`);
+        if(u)window.open(u,"_blank","noopener"); else toast("listen links are off");break;}
       case "enter":openRym();break;
       case "n":e.preventDefault();$("#noteBox").focus();break;
       case "/":e.preventDefault();openOv("ovFind");break;

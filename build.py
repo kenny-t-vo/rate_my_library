@@ -24,6 +24,8 @@ EDITION_WORDS = (r"remaster(?:ed|s)?|deluxe|expanded|anniversary|edition|reissue
                  r"super\s+deluxe|legacy|explicit|clean|mono|stereo|collector'?s|"
                  r"special\s+edition|\d{4}\s+mix|remix(?:ed)?\s+edition|japan(?:ese)?\s+edition")
 BRACKETED = re.compile(r"\s*[\(\[\{]\s*[^()\[\]{}]*\b(?:%s)\b[^()\[\]{}]*[\)\]\}]\s*$" % EDITION_WORDS, re.I)
+# "Either/Or: Expanded Edition"
+COLONED   = re.compile(r":\s*[^:]*\b(?:%s)\b[^:]*$" % EDITION_WORDS, re.I)
 # Spotify's dash style, e.g. "Romantico - 2022 Remaster"
 DASHED    = re.compile(r"\s+[-–—]\s+[^-–—]*\b(?:%s)\b[^-–—]*$" % EDITION_WORDS, re.I)
 # Trailing bare year-remaster with no keyword, e.g. "Album (2011)" -- deliberately NOT stripped.
@@ -36,6 +38,7 @@ def strip_edition(title):
         prev = s
         s = BRACKETED.sub("", s).strip()
         s = DASHED.sub("", s).strip()
+        s = COLONED.sub("", s).strip()
         s = re.sub(r"\s+\d+(?:st|nd|rd|th)\s+anniversary(?:\s+edition)?\s*$", "", s, flags=re.I).strip()
         s = s.rstrip(" -–—,:;")
     return s if s.strip() else title
@@ -61,7 +64,7 @@ def norm_key(s):
     existing ratings.
     """
     orig = s
-    s = fold_accents(s).lower()
+    s = fold_accents(unicodedata.normalize("NFKC", s)).lower()
     s = s.replace("&", "and")
     s = re.sub(r"[‘’ʼ']", "", s)      # apostrophes
     s = re.sub(r"[“”\"]", "", s)
@@ -87,6 +90,7 @@ def norm_track(t):
 
 # ---------------------------------------------------------------- sources
 
+NOTE_MAX = 500          # keep in step with rate.py
 SPOTIFY_MIN_MS = 30000   # Last.fm scrobbles at 30s; match it so counts compare
 
 def _iso_to_epoch(t):
@@ -517,6 +521,178 @@ def resolve_rym(albums, limit=None, sleep=1.2):
     sys.stderr.write("\n")
     return found
 
+def _write_json_atomic(path, obj):
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, path)
+
+def _read_json(path, fallback):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return fallback
+
+def fetch_tracklists(albums, limit=None, sleep=1.15):
+    """Fetch the real tracklist for each album from MusicBrainz.
+
+    Without this, "album spins" divides plays by the number of tracks you have
+    heard, so an album you only ever played two songs from looks like you span
+    it dozens of times. The real track count fixes that, and the tracklist lets
+    the app show songs you have never played.
+
+    One request per album at the 1/sec limit. Resumable: albums that already
+    have a tracklist are skipped.
+    """
+    todo = [a for a in albums if not a.get("total_tracks")
+            and (a.get("mbid") or a.get("rgid"))]
+    if limit:
+        todo = todo[:limit]
+    print("Fetching tracklists for %d albums (about %.0f min)"
+          % (len(todo), len(todo) * sleep / 60), file=sys.stderr)
+
+    got = 0
+    for n, a in enumerate(todo, 1):
+        try:
+            if a.get("mbid"):
+                url = ("https://musicbrainz.org/ws/2/release/%s"
+                       "?inc=recordings+release-groups&fmt=json" % a["mbid"])
+            else:
+                url = ("https://musicbrainz.org/ws/2/release"
+                       "?release-group=%s&inc=recordings&limit=1&fmt=json" % a["rgid"])
+            b, _ = _get(url)
+            j = json.loads(b.decode("utf-8"))
+            if "releases" in j:
+                rel = (j.get("releases") or [None])[0]
+                if not rel:
+                    time.sleep(sleep); continue
+                j = rel
+            tracks = [t for m in j.get("media", []) for t in m.get("tracks", [])]
+            if tracks:
+                a["full_tracks"] = [{"n": t.get("position") or k + 1,
+                                     "name": t.get("title", "")}
+                                    for k, t in enumerate(tracks)]
+                a["total_tracks"] = len(tracks)
+                a["discs"] = len(j.get("media", []))
+                got += 1
+            rg = (j.get("release-group") or {}).get("id")
+            if rg and not a.get("rgid"):
+                a["rgid"] = rg
+        except Exception:
+            pass
+        time.sleep(sleep)
+        if n % 20 == 0 or n == len(todo):
+            sys.stderr.write("\r  tracklists %d/%d  matched %d  " % (n, len(todo), got))
+            sys.stderr.flush()
+            recompute_spins(albums)
+            save_albums(albums)
+    sys.stderr.write("\n")
+    return got
+
+def recompute_spins(albums):
+    """Divide by the real track count where it is known, heard tracks otherwise."""
+    for a in albums:
+        total = a.get("total_tracks") or 0
+        # a heard count above the fetched total means bonus tracks or a
+        # different pressing; trust the larger number
+        basis = max(total, a["distinct_tracks"]) if total else a["distinct_tracks"]
+        a["spins_basis"] = "album" if total else "heard"
+        a["spins"] = round(a["plays"] / basis, 2) if basis else 0
+
+def remerge(albums, ratings_path=None):
+    """Re-apply the current normalisation to an existing library.
+
+    Rebuilding from the original export is the usual path, but the export is
+    often long gone, and normalisation changes after the fact. This regroups
+    what is already in albums.json, sums the plays, and moves any ratings from
+    the old ids onto the surviving one. Where two merged albums were both
+    rated, the higher-play side wins and the other is recorded in the note so
+    nothing disappears silently.
+    """
+    groups = collections.OrderedDict()
+    for a in albums:
+        key = (norm_key(a["artist"]), norm_key(strip_edition(a["album"])))
+        groups.setdefault(key, []).append(a)
+
+    ratings = _read_json(ratings_path, {}) if ratings_path else {}
+    out, remap, notes = [], {}, 0
+
+    for key, members in groups.items():
+        members.sort(key=lambda x: -x["plays"])
+        if len(members) == 1:
+            out.append(members[0]); continue
+        head = dict(members[0])
+        head["plays"] = sum(m["plays"] for m in members)
+
+        tally, names = collections.Counter(), {}
+        for m in members:
+            for t in m["tracks"]:
+                k = t["name"].lower()
+                tally[k] += t["plays"]
+                if k not in names or len(t["name"]) < len(names[k]):
+                    names[k] = t["name"]
+        head["tracks"] = [{"name": names[k], "plays": c} for k, c in tally.most_common()]
+        head["distinct_tracks"] = len(head["tracks"])
+        head["spins"] = round(head["plays"] / len(head["tracks"]), 2) if head["tracks"] else 0
+        head["top_track"] = head["tracks"][0]["name"] if head["tracks"] else ""
+        head["top_track_plays"] = head["tracks"][0]["plays"] if head["tracks"] else 0
+
+        years = collections.Counter()
+        for m in members:
+            for y, c in (m.get("years") or {}).items():
+                years[y] += c
+        head["years"] = dict(years)
+        head["first"] = min([m["first"] for m in members if m.get("first")] or [0])
+        head["last"] = max(m.get("last", 0) for m in members)
+        for f in ("mbid", "rgid", "artist_mbid", "rym", "art", "art_src"):
+            head[f] = next((m.get(f) for m in members if m.get(f)), head.get(f, ""))
+        seen, variants = set(), []
+        for m in members:
+            for v in ([m["album"]] + (m.get("variants") or [])):
+                if v not in seen:
+                    seen.add(v); variants.append(v)
+        head["album"] = strip_edition(members[0]["album"])
+        head["variants"] = variants
+        head["id"] = hashlib.md5(("%s|%s" % key).encode("utf-8")).hexdigest()[:12]
+
+        # ratings: highest-play side wins, the rest are folded into its note
+        rated = [(m, ratings.get(m["id"])) for m in members]
+        rated = [(m, r) for m, r in rated if r and (r.get("rating") or r.get("note"))]
+        if rated:
+            keep_m, keep_r = rated[0]
+            merged = dict(keep_r)
+            lost = ["%s rated %.1f" % (m["album"], r["rating"])
+                    for m, r in rated[1:] if r.get("rating")]
+            if lost:
+                extra = "merged: " + "; ".join(lost)
+                merged["note"] = ((merged.get("note", "") + " ") + extra).strip()[:NOTE_MAX]
+                notes += 1
+            for m, _ in rated:
+                ratings.pop(m["id"], None)
+            ratings[head["id"]] = merged
+        for m in members:
+            remap[m["id"]] = head["id"]
+        out.append(head)
+
+    # ids change when a group collapses, so bring the cached cover with it
+    for old, new in remap.items():
+        if old == new:
+            continue
+        src, dst = os.path.join(ART, old + ".jpg"), os.path.join(ART, new + ".jpg")
+        if os.path.exists(src) and not os.path.exists(dst):
+            try: os.replace(src, dst)
+            except OSError: pass
+    for a in out:
+        a.setdefault("rym_search", rym_search_url(a))
+        a["rym_search"] = rym_search_url(a)
+
+    out.sort(key=lambda a: -a["plays"])
+    for n, a in enumerate(out, 1):
+        a["rank"] = n
+    merged_count = sum(1 for k, v in groups.items() if len(v) > 1)
+    return out, ratings, merged_count, notes
+
 # ---------------------------------------------------------------- io
 
 def reindex_art(albums):
@@ -550,6 +726,10 @@ def main():
                    help="look up MusicBrainz ids for albums that lack them "
                         "(needed for cover art and RYM links on Spotify imports)")
     p.add_argument("--mbid-limit", type=int, default=None)
+    p.add_argument("--tracklists", action="store_true",
+                   help="fetch real tracklists from MusicBrainz; fixes album spins "
+                        "and shows songs you have not played")
+    p.add_argument("--tracklist-limit", type=int, default=None)
     p.add_argument("--min-plays", type=int, default=8,
                    help="build-time floor; keep it low, filter live in the UI (default 8)")
     p.add_argument("--no-art", action="store_true")
@@ -558,11 +738,42 @@ def main():
     p.add_argument("--rym", action="store_true", help="resolve direct RYM links via MusicBrainz (slow)")
     p.add_argument("--rym-limit", type=int, default=None)
     p.add_argument("--reindex", action="store_true", help="just re-scan data/art and update albums.json")
+    p.add_argument("--remerge", action="store_true",
+                   help="re-apply the current normalisation to the existing library, "
+                        "moving ratings onto the surviving album. No source export needed.")
     p.add_argument("--workers", type=int, default=6)
     a = p.parse_args()
 
     os.makedirs(ART, exist_ok=True)
     apath = os.path.join(DATA, "albums.json")
+
+    if a.tracklists and not a.input:
+        albums = json.load(open(apath, encoding="utf-8"))
+        n = fetch_tracklists(albums, a.tracklist_limit)
+        recompute_spins(albums); save_albums(albums)
+        print("Tracklists for %d albums." % n); return
+
+    if a.remerge:
+        albums = json.load(open(apath, encoding="utf-8"))
+        rp = os.path.join(DATA, "ratings.json")
+        if os.path.exists(rp):                      # ratings are hours of work
+            snap = os.path.join(DATA, "snapshots")
+            os.makedirs(snap, exist_ok=True)
+            r = _read_json(rp, {})
+            with open(os.path.join(snap, "%d-auto-before-remerge.json" % time.time()), "w",
+                      encoding="utf-8") as f:
+                json.dump({"name": "before remerge", "kind": "auto", "ts": int(time.time()),
+                           "rated": len([v for v in r.values() if v.get("rating")]),
+                           "ratings": r}, f, ensure_ascii=False)
+        before = len(albums)
+        albums, ratings, merged, notes = remerge(albums, rp if os.path.exists(rp) else None)
+        save_albums(albums)
+        if os.path.exists(rp):
+            _write_json_atomic(rp, ratings)
+        print("Remerged %d albums into %d (%d groups collapsed%s)."
+              % (before, len(albums), merged,
+                 ", %d ratings folded into a note" % notes if notes else ""))
+        return
 
     if a.reindex:
         albums = json.load(open(apath, encoding="utf-8"))
@@ -630,6 +841,10 @@ def main():
 
     if a.mbids:
         enrich_mbids(albums, a.mbid_limit); save_albums(albums)
+
+    if a.tracklists:
+        fetch_tracklists(albums, a.tracklist_limit)
+        recompute_spins(albums); save_albums(albums)
 
     if a.rym:
         n = resolve_rym(albums, a.rym_limit)
