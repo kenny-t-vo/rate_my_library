@@ -3,6 +3,15 @@
 Rate your albums fast from your listening history, then carry the ratings over to
 RateYourMusic. Python standard library plus one HTML file. Nothing to install, all local.
 
+## Two ways to run it
+
+**In a browser**, with nothing to install: <https://kenny-t-vo.github.io/rate_my_library/>.
+Drop your export on the page and start rating. The file is parsed in the tab,
+ratings are stored in that browser, and nothing is uploaded. See `web/README.md`.
+
+**On the command line**, below, which fetches cover art and MusicBrainz data up
+front rather than as you go, and writes its output to files.
+
 ## Setup
 
 ```bash
