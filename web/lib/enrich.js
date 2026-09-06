@@ -17,7 +17,10 @@ const UA_NOTE = "rate_my_library";
 
 // one bucket per host so a slow MusicBrainz queue never stalls cover art
 class Limiter {
-  constructor(perSec, burst = 1) { this.gap = 1000 / perSec; this.next = 0; this.burst = burst; this.live = 0; }
+  constructor(perSec, burst = 1, timeout = 10000) {
+    this.gap = 1000 / perSec; this.next = 0; this.burst = burst; this.live = 0;
+    this.timeout = timeout;
+  }
   async take() {
     while (this.live >= this.burst) await new Promise(r => setTimeout(r, 40));
     this.live++;
@@ -27,13 +30,16 @@ class Limiter {
   }
   done() { this.live--; }
 }
-const MB  = new Limiter(1, 1);      // musicbrainz asks for one per second
-const ART = new Limiter(8, 6);      // image CDNs are fine with more
+// timeouts stop one stalled request wedging an album: enrich holds inflight for
+// its whole run, and nothing retries an album it thinks is already in progress.
+const MB  = new Limiter(1, 1, 25000);   // one a second, and it does take seconds
+const ART = new Limiter(8, 6, 10000);   // itunes answers in about 300ms
 
 async function j(url, lim) {
   await lim.take();
   try {
-    const r = await fetch(url, { headers: { Accept: "application/json" } });
+    const r = await fetch(url, { headers: { Accept: "application/json" },
+                                 signal: AbortSignal.timeout(lim.timeout) });
     if (!r.ok) throw new Error(r.status);
     return await r.json();
   } finally { lim.done(); }
@@ -81,20 +87,60 @@ async function coverUrl(a) {
   return null;                       // Deezer has no CORS, so it is not reachable here
 }
 
+// An artist's own catalogue, cached for the session. Free-text search ranks a
+// real album below unrelated singles often enough that it alone finds 27% of a
+// library; asking the artist for their releases instead takes that to 52%.
+// Whole Lotta Red is not in fifteen results for "Playboi Carti Whole Lotta Red"
+// and is the second entry in Playboi Carti's catalogue.
+const catByArtist = new Map();
+
+async function itunesCatalog(a, knownId) {
+  const key = mk(a.artist);
+  if (catByArtist.has(key)) return catByArtist.get(key);
+  let id = knownId;
+  if (!id) {
+    const s = await j(`https://itunes.apple.com/search?term=${encodeURIComponent(a.artist)}` +
+                      `&entity=musicArtist&limit=3`, ART);
+    id = ((s.results || []).find(r => sameArtist(a.artist, r.artistName)) || {}).artistId;
+  }
+  let cols = [];
+  if (id) {
+    const c = await j(`https://itunes.apple.com/lookup?id=${id}&entity=album&limit=200`, ART);
+    cols = (c.results || []).filter(r => r.wrapperType === "collection")
+      .map(r => ({ collectionId: r.collectionId, collectionName: r.collectionName,
+                   artistName: r.artistName, artworkUrl100: r.artworkUrl100,
+                   trackCount: r.trackCount }));
+  }
+  catByArtist.set(key, cols);
+  return cols;
+}
+
 // A deluxe reissue and the album proper carry the same name and both verify.
 // The smaller one is the album, and its track count is what album spins divide
 // by, so a 19-track Souvlaki deluxe must not stand in for the 10-track record.
-async function itunesAlbum(a) {
-  const q = encodeURIComponent(`${a.artist} ${a.album}`);
-  const d = await j(`https://itunes.apple.com/search?term=${q}&entity=album&limit=15`, ART);
-  const hits = (d.results || []).filter(r => verify(a, r.artistName, r.collectionName));
+function bestHit(a, rows) {
+  const hits = rows.filter(r => verify(a, r.artistName, r.collectionName));
   hits.sort((x, y) => (x.trackCount || 1e6) - (y.trackCount || 1e6));
   return hits[0] || null;
 }
+
+async function itunesAlbum(a) {
+  const q = encodeURIComponent(`${a.artist} ${a.album}`);
+  const d = await j(`https://itunes.apple.com/search?term=${q}&entity=album&limit=15`, ART);
+  const res = d.results || [];
+  const hit = bestHit(a, res);
+  if (hit) return hit;
+  // a miss usually still returns the right artist under some other release, and
+  // that carries the id, which saves the search the catalogue would need
+  const sib = res.find(r => sameArtist(a.artist, r.artistName));
+  return bestHit(a, await itunesCatalog(a, sib && sib.artistId));
+}
 async function ok(url) {
   await ART.take();
-  try { const r = await fetch(url, { method: "GET" }); return r.ok; }
-  catch { return false; } finally { ART.done(); }
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(ART.timeout) });
+    return r.ok;
+  } catch { return false; } finally { ART.done(); }
 }
 
 // ---- musicbrainz -----------------------------------------------------
