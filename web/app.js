@@ -153,7 +153,7 @@ function render(){
   const direct=!!a.rym;
   const lu=listen(`${a.artist} ${a.album}`), sv=SERVICES[CFG.listenOn];
   $("#rym").innerHTML=`<a href="${esc(direct?a.rym:a.rym_search)}" target="_blank" rel="noopener">`
-    +`rateyourmusic</a> <span class="lbl">${direct?"album page":"search"} · enter</span>`
+    +`rateyourmusic</a> <span class="lbl">enter</span>`
     +(lu?` <a href="${esc(lu)}" target="_blank" rel="noopener" style="margin-left:14px">`
         +`${esc(sv.label)}</a> <span class="lbl">L</span>`:"");
 
@@ -169,7 +169,7 @@ function render(){
 
   const v=r.rating||0;
   $("#stars").textContent=stars(v);
-  const rv=$("#rval"); rv.textContent=v?v.toFixed(1)+" of 5":"unrated"; rv.classList.toggle("un",!v);
+  const rv=$("#rval"); rv.textContent=v?"":"unrated"; rv.classList.toggle("un",!v);
   $$("#scale .cell").forEach(c=>c.classList.toggle("on",+c.dataset.v===v));
 
   const nb=$("#noteBox");
@@ -186,8 +186,6 @@ function render(){
   ].map(([k,val])=>`<dt>${k}</dt><dd>${esc(String(val))}</dd>`).join("");
 
   const ys=a.years||{}, yk=Object.keys(ys).sort(), ym=Math.max(1,...Object.values(ys));
-  const peak=yk.find(y=>ys[y]===ym);
-  $("#ctxSum").textContent = yk.length>1 ? `peak ${peak} · ${yk.length} years` : "";
   $("#ctx").style.visibility = yk.length>1 ? "visible" : "hidden";
   $("#years").innerHTML=yk.map(y=>
     `<div class="r${ys[y]===ym?" top":""}"><span>${y}</span><span>${ys[y]}</span>
