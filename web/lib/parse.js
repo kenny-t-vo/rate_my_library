@@ -32,29 +32,64 @@ function* csvRows(text) {
   if (field !== "" || row.length) { row.push(field); yield row; }
 }
 
+const HEAD_WORDS = new Set(["artist", "album", "track", "uts", "utc_time", "date", "timestamp"]);
+
+// bare unix seconds, or "06 Sep 2026, 00:46" in whatever zone the exporter used,
+// which is read as local. parsed by hand because only V8 takes that second form.
+const MONTHS = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5,
+                 jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 };
+function parseWhen(s) {
+  s = (s || "").trim();
+  if (!s) return 0;
+  if (/^\d{9,11}$/.test(s)) return parseInt(s, 10);
+  const m = /^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4})[,\s]+(\d{1,2}):(\d{2})/.exec(s);
+  const mo = m && MONTHS[m[2].toLowerCase()];
+  if (mo !== undefined && mo !== null)
+    return Math.floor(new Date(+m[3], mo, +m[1], +m[4], +m[5]).getTime() / 1000) || 0;
+  const d = Date.parse(s);
+  return isNaN(d) ? 0 : Math.floor(d / 1000);
+}
+
 export function readLastfmCsv(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
   const rows = csvRows(text);
-  const head = rows.next().value;
-  if (!head) return [];
-  const ix = {};
-  head.forEach((h, k) => ix[h.trim().toLowerCase()] = k);
-  const need = ["artist", "album", "track"];
-  if (need.some(k => ix[k] === undefined))
-    throw new Error("This CSV has no " + need.filter(k => ix[k] === undefined).join("/") +
-                    " column. A Last.fm export needs artist, album, track and uts.");
+  const first = rows.next().value;
+  if (!first) return [];
+
+  // Last.fm's own export is headed. The third-party exporters people actually
+  // use write no header at all: artist,album,track,"06 Sep 2026, 00:46".
+  let ix, pending = null;
+  if (first.some(c => HEAD_WORDS.has(c.trim().toLowerCase()))) {
+    ix = {};
+    first.forEach((h, k) => ix[h.trim().toLowerCase()] = k);
+    const need = ["artist", "album", "track"];
+    if (need.some(k => ix[k] === undefined))
+      throw new Error("This CSV has a header but no " +
+                      need.filter(k => ix[k] === undefined).join("/") + " column.");
+  } else if (first.length >= 4) {
+    ix = { artist: 0, album: 1, track: 2, uts: 3 };
+    pending = first;
+  } else {
+    throw new Error("This CSV is neither a headed Last.fm export (artist, album, track, uts) " +
+                    "nor the headerless artist,album,track,date form. It has " +
+                    first.length + " column" + (first.length === 1 ? "" : "s") + ".");
+  }
+
   const out = [];
-  for (const r of rows) {
+  const add = r => {
     const artist = (r[ix.artist] || "").trim();
     const album  = (r[ix.album]  || "").trim();
-    if (!artist || !album) continue;
+    if (!artist || !album) return;
     out.push({
       artist, album,
       track: (r[ix.track] || "").trim(),
-      ts: parseInt(r[ix.uts] || "0", 10) || 0,
+      ts: parseWhen(r[ix.uts]),
       mbid: (r[ix.album_mbid] || "").trim(),
       artistMbid: (r[ix.artist_mbid] || "").trim(),
     });
-  }
+  };
+  if (pending) add(pending);
+  for (const r of rows) add(r);
   return out;
 }
 

@@ -105,21 +105,57 @@ def _iso_to_epoch(t):
             continue
     return 0
 
+HEAD_WORDS = {"artist", "album", "track", "uts", "utc_time", "date", "timestamp"}
+_MONTHS = {m: i + 1 for i, m in enumerate(
+    "jan feb mar apr may jun jul aug sep oct nov dec".split())}
+SCROBBLE_DATE = re.compile(r"(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4})[,\s]+(\d{1,2}):(\d{2})")
+
+def _scrobble_when(s):
+    """Unix seconds from bare digits or '06 Sep 2026, 00:46', read as local."""
+    s = (s or "").strip()
+    if not s:
+        return 0
+    if s.isdigit():
+        return int(s)
+    m = SCROBBLE_DATE.match(s)
+    if m and m.group(2).lower() in _MONTHS:
+        return int(time.mktime((int(m.group(3)), _MONTHS[m.group(2).lower()], int(m.group(1)),
+                                int(m.group(4)), int(m.group(5)), 0, 0, 0, -1)))
+    return 0
+
 def read_lastfm_csv(path, **kw):
     """Last.fm scrobble export. Carries MusicBrainz ids, so its cover art and
-    RateYourMusic coverage are the best of the three sources."""
-    with open(path, newline="", encoding="utf-8") as f:
-        for d in csv.DictReader(f):
+    RateYourMusic coverage are the best of the three sources. Also reads the
+    headerless artist,album,track,date form the third-party exporters write."""
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        rows = csv.reader(f)
+        first = next(rows, None)
+        if first is None:
+            return
+        if any(c.strip().lower() in HEAD_WORDS for c in first):
+            keys, pending = [c.strip().lower() for c in first], None
+        elif len(first) >= 4:
+            keys, pending = ["artist", "album", "track", "uts"], first
+        else:
+            return
+
+        def rec(r):
+            d = dict(zip(keys, r))
             artist = (d.get("artist") or "").strip()
             album  = (d.get("album")  or "").strip()
             if not artist or not album:
-                continue
-            try:
-                ts = int(d.get("uts") or 0)
-            except ValueError:
-                ts = 0
-            yield (artist, album, (d.get("track") or "").strip(), ts,
-                   (d.get("album_mbid") or "").strip(), (d.get("artist_mbid") or "").strip())
+                return None
+            return (artist, album, (d.get("track") or "").strip(), _scrobble_when(d.get("uts")),
+                    (d.get("album_mbid") or "").strip(), (d.get("artist_mbid") or "").strip())
+
+        for r in ([pending] if pending else []):
+            v = rec(r)
+            if v:
+                yield v
+        for r in rows:
+            v = rec(r)
+            if v:
+                yield v
 
 def _spotify_files(path):
     """Accept the raw zip, the unzipped folder, or a single json file."""

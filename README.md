@@ -29,8 +29,10 @@ git clone https://github.com/kenny-t-vo/rate_my_library && cd rate_my_library
 Two sources. Only one runs; the app is identical either way.
 
 **Last.fm** is the better input. Export it from
-<https://benjaminbenben.com/lastfm-to-csv/>. Every scrobble carries MusicBrainz ids,
-which is what gets you 97% cover art and direct RateYourMusic album links.
+<https://benjaminbenben.com/lastfm-to-csv/>, which writes a headerless
+`artist,album,track,date` file. A headed export carrying `album_mbid` and
+`artist_mbid` columns is read too, and does better: those ids are what get you 97%
+cover art and direct RateYourMusic album links, rather than title matching.
 
 ```bash
 /usr/bin/python3 build.py ~/Downloads/scrobbles-you-0000000.csv
