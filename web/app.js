@@ -28,7 +28,7 @@ const SERVICES={
   google: {label:"google", url:q=>"https://www.google.com/search?q="+encodeURIComponent(q)}};
 const listen=q=>{const sv=SERVICES[CFG.listenOn]; return sv?sv.url(q):null;};
 const ntrk=s=>s.toLowerCase().normalize("NFKD").replace(/[^\w\s]/g," ").replace(/\s+/g," ").trim();
-const stars=v=>v?"★".repeat(Math.floor(v))+((v%1)?"½":""):"";
+const stars=v=>v?"★".repeat(Math.floor(v))+((v%1)?"½":""):"☆☆☆☆☆";
 const fdate=t=>t?new Date(t*1000).toLocaleDateString(undefined,{year:"numeric",month:"short"}):"";
 function toast(m,ms){clearTimeout(toast._t);const t=$("#toast");t.textContent=m;t.classList.add("on");
   toast._t=setTimeout(()=>t.classList.remove("on"),ms||1500);}
@@ -169,7 +169,6 @@ function render(){
 
   const v=r.rating||0;
   $("#stars").textContent=stars(v);
-  const rv=$("#rval"); rv.textContent=v?"":"unrated"; rv.classList.toggle("un",!v);
   $$("#scale .cell").forEach(c=>c.classList.toggle("on",+c.dataset.v===v));
 
   const nb=$("#noteBox");

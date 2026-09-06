@@ -91,8 +91,6 @@ h2 a{text-underline-offset:3px}
 .rateHd{display:flex;align-items:baseline;gap:12px;padding-bottom:7px;
   border-bottom:1px solid var(--rule2);margin-bottom:10px}
 .stars{font-size:16px;letter-spacing:.05em;min-width:78px}
-.rval{font:var(--t4)/1 var(--mono)}
-.rval.un{color:var(--faint);font:var(--t6)/1 var(--serif);letter-spacing:.09em}
 .scale{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;max-width:520px}
 .cell{border:1px solid var(--rule);padding:8px 0 9px;text-align:center;cursor:pointer;
   transition:background .09s,border-color .09s,color .09s;user-select:none}
