@@ -12,8 +12,8 @@
   <div class="wcard">
     <h1 class="wtitle">rate_my_library.</h1>
     <p class="wlede">Rate your albums fast from your listening history, then carry the
-      ratings over to RateYourMusic. Everything happens in this browser: your history is
-      read here, your ratings are stored here, and nothing is uploaded anywhere.</p>
+      ratings over to RateYourMusic. Your history is read in this browser and your ratings
+      stay here; the file is never uploaded.</p>
 
     <div class="wgrp"><div class="hd lbl">start.</div>
       <label class="drop" id="drop">
@@ -26,8 +26,8 @@
 
     <div class="wgrp"><div class="hd lbl">where to get one.</div>
       <dl class="kv wkv">
-        <dt><b>Last.fm</b>, the quicker input. It downloads now rather than in a few
-          weeks, and covers everything you scrobble, not only what you played on Spotify.</dt>
+        <dt><b>Last.fm</b>, the quicker input. It downloads immediately, and covers
+          everything you scrobble whatever you played it on.</dt>
         <dd><a href="https://benjaminbenben.com/lastfm-to-csv/" target="_blank" rel="noopener">export csv</a></dd>
         <dt><b>Spotify</b>, the <i>extended streaming history</i> only. Request it under
           Privacy Settings; it is emailed to you and takes days to a few weeks. The short
@@ -204,9 +204,8 @@
       <span class="lbl" id="impMsg"></span></div>
     <div style="font-size:var(--t4);color:var(--dim);line-height:1.55;margin-top:10px">
       A Last.fm csv, or a Spotify extended streaming history as a zip or its json files.
-      Your ratings and notes carry over: they are keyed by artist and album, not by
-      position in the file, so a newer export of the same library keeps every score.
-      A save state is written before the rebuild either way.</div>
+      Ratings and notes are keyed by artist and album, so a newer export of the same
+      library keeps every score. A save state is written before the rebuild.</div>
     <div class="rowbtns" style="margin-top:16px"><a class="lnk" id="ratGo">load a ratings file</a>
       <input type="file" id="impRatings" accept=".json" hidden>
       <span class="lbl" id="ratMsg">ratings.json from the command line version, or an export from here</span></div>
@@ -217,9 +216,8 @@
 </div></div>
 
 <div class="ov" id="ovSnap"><div class="card">
-  <h3>save states.</h3><div class="cs">Every rating is already saved the moment you press it.
-    These are named restore points. A snapshot is taken automatically before any
-    restore, so restoring is itself undoable.</div>
+  <h3>save states.</h3><div class="cs">Every rating is saved the moment you press it. These
+    are named restore points. One is taken before any restore, so restoring is undoable.</div>
   <div class="grp"><div class="hd lbl">create.</div>
     <div class="opt"><label>name</label><input type="text" id="snapName" placeholder="before re-rating the 4s"><span></span></div>
     <div class="rowbtns"><a class="lnk" id="snapGo">save state now</a></div>
@@ -270,24 +268,24 @@
 
 <div class="ov" id="ovAbout"><div class="card">
   <h3>rate_my_library.</h3>
-  <div class="cs">Turns a listening history into a queue you can rate quickly, then hands you
-    an ordered list ready for RateYourMusic. It reads a Last.fm scrobble export or a Spotify
-    extended streaming history, merges the edition variants so each record appears once, and
-    ranks by how much you actually played it.</div>
+  <div class="cs">Turns a listening history into a queue you can rate quickly, then an
+    ordered list for RateYourMusic. It reads a Last.fm scrobble export or a Spotify
+    extended streaming history, merges edition variants so each record appears once, and
+    ranks by how much you played it.</div>
   <div class="grp"><div class="hd lbl">where things live.</div>
     <dl class="kv" style="font-size:var(--t4);line-height:1.95">
-      <dt>your ratings</dt><dd>data/ratings.json</dd>
-      <dt>save states</dt><dd>data/snapshots/</dd>
-      <dt>exports</dt><dd>out/</dd>
-      <dt>covers</dt><dd>data/art/</dd>
+      <dt>your ratings</dt><dd>this browser</dd>
+      <dt>save states</dt><dd>this browser</dd>
+      <dt>exports</dt><dd>downloaded when you ask</dd>
+      <dt>covers</dt><dd>fetched as you go, not kept</dd>
     </dl>
     <div style="font-size:var(--t4);color:var(--dim);margin-top:11px;line-height:1.5">
-      Nothing leaves this machine. The app runs on localhost and talks to the outside world
-      only when it fetches cover art or looks something up on MusicBrainz.</div>
+      Your history file is read here and never uploaded. Artist and album names do go out,
+      to iTunes for covers and tracklists and to MusicBrainz for ids.</div>
   </div>
   <div class="grp"><div class="hd lbl">source.</div>
     <div style="font-size:var(--t4);line-height:1.6">
-      <a href="https://github.com/kenny-t-vo" target="_blank" rel="noopener">github.com/kenny-t-vo</a>
+      <a href="https://github.com/kenny-t-vo/rate_my_library" target="_blank" rel="noopener">github.com/kenny-t-vo/rate_my_library</a>
     </div>
   </div>
   <div class="rowbtns"><a class="lnk" id="aboutClose">close</a></div>

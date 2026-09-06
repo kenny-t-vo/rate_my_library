@@ -1,16 +1,17 @@
 # rate_my_library
 
 Rate your albums fast from your listening history, then carry the ratings over to
-RateYourMusic. Python standard library plus one HTML file. Nothing to install, all local.
+RateYourMusic. Runs in a browser or from the command line, with nothing outside the
+Python standard library.
 
 ## Two ways to run it
 
 **In a browser**, with nothing to install: <https://kenny-t-vo.github.io/rate_my_library/>.
-Drop your export on the page and start rating. The file is parsed in the tab,
-ratings are stored in that browser, and nothing is uploaded. See `web/README.md`.
+Drop your export on the page and start rating. It is parsed in the tab, ratings are
+stored in that browser, and the file is never uploaded. See `web/README.md`.
 
-**On the command line**, below, which fetches cover art and MusicBrainz data up
-front rather than as you go, and writes its output to files.
+**On the command line**, below. It fetches cover art and MusicBrainz data up front
+rather than as you go, and writes its output to files.
 
 ## Setup
 
@@ -38,7 +39,7 @@ cover art and direct RateYourMusic album links, rather than title matching.
 /usr/bin/python3 build.py ~/Downloads/scrobbles-you-0000000.csv
 ```
 
-**Spotify** works, with two caveats worth knowing before you start.
+**Spotify** works, with two caveats.
 
 You need the **extended streaming history**, requested from Spotify under Privacy
 Settings. Spotify emails it to you and it can take several days to a few weeks to
@@ -61,9 +62,9 @@ One thing Spotify does better: it records how long each track played, so plays u
 30 seconds are dropped as skips. Last.fm cannot tell you that. Change the threshold
 with `--min-seconds`.
 
-Spotify's *Web API* is not an option, in case you were wondering: it exposes no play
-counts at all, and its history endpoint returns only your last 50 tracks. Apple Music
-is worse still, requiring a paid developer account and also exposing no play counts.
+Spotify's *Web API* is not an option: it exposes no play counts at all, and its
+history endpoint returns only your last 50 tracks. Apple Music needs a paid developer
+account and also exposes no play counts.
 
 > Run it with `/usr/bin/python3`. If your default `python3` is a python.org build
 > with no CA certificates installed, every HTTPS request in `build.py` fails.

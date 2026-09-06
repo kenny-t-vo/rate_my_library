@@ -1,9 +1,9 @@
 # rate_my_library, in the browser
 
 The same app with no clone and no terminal. Open `index.html` from any static
-host, drop in your listening history, and rate. Nothing is uploaded: the file is
-parsed here, the ratings live in this browser's IndexedDB, and the only requests
-that leave are for cover art and MusicBrainz lookups.
+host, drop in your listening history, and rate. The file is parsed here and never
+uploaded, and the ratings live in this browser's IndexedDB. Artist and album names
+do go out, to fetch covers, tracklists and ids.
 
 ## Hosting it
 
@@ -21,15 +21,19 @@ every score intact, and an export from here loads back.
 
 ## Enrichment
 
-The CLI fetches everything up front. Here it happens as you go, because
-MusicBrainz allows one request a second and forty minutes of held-open tab is
-not a first run. Play counts come from the file alone, so the queue is rateable
-about ten seconds after import; cover art, tracklists and RateYourMusic links
-fill in for the album on screen and the dozen either side of it.
+The CLI fetches everything up front. Here it happens as you go. Play counts come
+from the file alone, so the queue is rateable as soon as the import finishes.
 
-Deezer has no CORS headers, so it cannot be reached from a page. That costs some
-cover art the CLI would find. Cover Art Archive and iTunes both work, and every
-candidate is still checked against artist and album before it is accepted.
+Cover art and tracklists come from iTunes, which answers in about 300ms and needs
+no key, across the album on screen and the dozen either side. MusicBrainz costs
+about 2s a request behind a one-per-second limit, so it runs only for the album
+under the cursor and up to three ahead, and only for albums iTunes had no entry
+for. It is what Cover Art Archive covers and direct RateYourMusic links hang off.
+
+iTunes has no entry for a good half of some libraries — no *Whole Lotta Red*,
+little classical, few anime soundtracks — which is what that fallback is for.
+Deezer would cover more, but sends no CORS headers and cannot be reached from a
+page. Every candidate is checked against artist and album before it is accepted.
 
 ## Files
 
@@ -39,5 +43,5 @@ candidate is still checked against artist and album before it is accepted.
 | `lib/parse.js` | Last.fm csv, Spotify extended history, and a small zip reader |
 | `lib/aggregate.js` | plays to albums, matching `build_albums()` |
 | `lib/store.js` | IndexedDB: albums, ratings, snapshots, config |
-| `lib/enrich.js` | rate-limited art, MusicBrainz and RYM lookups |
+| `lib/enrich.js` | art and tracklists from iTunes, ids and RYM from MusicBrainz |
 | `app.js` | the interface |
