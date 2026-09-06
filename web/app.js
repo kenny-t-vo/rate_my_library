@@ -471,8 +471,7 @@ function bind(){
 
   $("#snapGo").onclick=async()=>{
     const name=$("#snapName").value.trim()||"manual save";
-    await fetch("/api/snapshots",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({name})});
+    await DB.snapshot(name);
     $("#snapName").value=""; loadSnaps(); toast("save state written");
   };
   $("#expGo").onclick=()=>{const n=downloadAll();
