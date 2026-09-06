@@ -130,16 +130,25 @@ export const setUpdateHandler = fn => { onUpdate = fn; };
 // artist-level RYM results cover a whole catalogue, so cache per artist
 const rymByArtist = new Map();
 
-export async function enrich(a, { wantArt = true, wantTracks = true, wantRym = true } = {}) {
+export async function enrich(a, { wantArt = true, wantIds = true, wantTracks = true, wantRym = true } = {}) {
   if (!a || inflight.has(a.id)) return;
   inflight.add(a.id);
   let changed = false;
+  // published as each step lands. the musicbrainz steps below run at one
+  // request a second, so holding the cover until they finished put it on
+  // screen up to a minute late.
+  const flush = async () => {
+    if (!changed) return;
+    changed = false;
+    await putAlbum(a); onUpdate(a);
+  };
   try {
     if (wantArt && !a.art && !a.art_tried) {
       const c = await coverUrl(a);
       a.art = c ? c.url : null; a.art_src = c ? c.src : ""; a.art_tried = true; changed = true;
+      await flush();
     }
-    if (!a.rgid && !a.mbid && !a.mbid_tried) {
+    if (wantIds && !a.rgid && !a.mbid && !a.mbid_tried) {
       const m = await findMbid(a);
       if (m) { a.rgid = m.rgid; a.artist_mbid = a.artist_mbid || m.artist_mbid; }
       a.mbid_tried = true; changed = true;
@@ -161,7 +170,7 @@ export async function enrich(a, { wantArt = true, wantTracks = true, wantRym = t
   } finally {
     inflight.delete(a.id);
   }
-  if (changed) { await putAlbum(a); onUpdate(a); }
+  await flush();
 }
 
 // The filmstrip shows roughly a dozen thumbnails either side of the current
@@ -175,7 +184,10 @@ export function prefetch(view, i, { art = 14, deep = 4 } = {}) {
     for (const a of [view[i + k], view[i - k]]) {
       if (!a) continue;
       const near = k <= deep;
-      enrich(a, { wantTracks: near, wantRym: near });
+      // every musicbrainz step is gated on near. ungating the id lookup put all
+      // 29 albums of the art window into a 1/sec queue on every cursor move,
+      // which outran the rate at which the queue drained.
+      enrich(a, { wantIds: near, wantTracks: near, wantRym: near });
     }
   }
 }
