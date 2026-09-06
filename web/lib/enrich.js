@@ -1,12 +1,14 @@
 // Cover art, MusicBrainz ids, tracklists and RateYourMusic links, fetched on
 // demand instead of in one long batch up front.
 //
-// MusicBrainz allows one request a second. Fetching 2,400 tracklists eagerly
-// is forty minutes with a tab held open. But play counts come entirely from
-// the imported file, so the queue is rateable immediately, and you move
-// through roughly one album every few seconds. Enriching what is on screen and
-// a little way ahead keeps up comfortably and never fetches the hundreds of
-// albums you do not reach.
+// Cover art and tracklists both come from iTunes, which answers in about 300ms
+// and takes no key. MusicBrainz is 2s a request behind a one-per-second queue
+// and degrades sharply when pushed, so it is reached for only what nothing else
+// carries: RateYourMusic links.
+//
+// Play counts come entirely from the imported file, so the queue is rateable
+// immediately. Enriching what is on screen and a little way ahead keeps up with
+// rating and never fetches the hundreds of albums you do not reach.
 
 import { putAlbum } from "./store.js";
 import { recomputeSpins } from "./aggregate.js";
@@ -53,24 +55,41 @@ const stripEd = s => s.replace(/\s*[\(\[][^\)\]]*\b(remaster|deluxe|expanded|edi
 const verify = (a, artist, album) => sameArtist(a.artist, artist) && mk(stripEd(a.album)) === mk(stripEd(album));
 
 // ---- cover art -------------------------------------------------------
+// Cover Art Archive needs an id, so it is reachable before the MusicBrainz
+// lookup only for imports that carried one. enrich() calls this again once a
+// lookup has produced an id, which is how iTunes misses get covered.
+async function caaArt(a) {
+  for (const [kind, id] of [["release", a.mbid], ["release-group", a.rgid]]) {
+    if (!id) continue;
+    const u = `https://coverartarchive.org/${kind}/${id}/front-500`;
+    if (await ok(u)) return { url: u, src: "caa" };
+  }
+  return null;
+}
+
 async function coverUrl(a) {
-  if (a.mbid) {
-    const u = `https://coverartarchive.org/release/${a.mbid}/front-500`;
-    if (await ok(u)) return { url: u, src: "caa" };
-  }
-  if (a.rgid) {
-    const u = `https://coverartarchive.org/release-group/${a.rgid}/front-500`;
-    if (await ok(u)) return { url: u, src: "caa" };
-  }
+  const caa = await caaArt(a);
+  if (caa) return caa;
   try {
-    const q = encodeURIComponent(`${a.artist} ${a.album}`);
-    const d = await j(`https://itunes.apple.com/search?term=${q}&entity=album&limit=8`, ART);
-    for (const r of d.results || []) {
-      if (!verify(a, r.artistName, r.collectionName)) continue;
-      if (r.artworkUrl100) return { url: r.artworkUrl100.replace("100x100bb", "600x600bb"), src: "itunes" };
+    const hit = await itunesAlbum(a);
+    if (hit) {
+      a.itid = hit.collectionId;     // reused for the tracklist
+      if (hit.artworkUrl100)
+        return { url: hit.artworkUrl100.replace("100x100bb", "600x600bb"), src: "itunes" };
     }
   } catch {}
   return null;                       // Deezer has no CORS, so it is not reachable here
+}
+
+// A deluxe reissue and the album proper carry the same name and both verify.
+// The smaller one is the album, and its track count is what album spins divide
+// by, so a 19-track Souvlaki deluxe must not stand in for the 10-track record.
+async function itunesAlbum(a) {
+  const q = encodeURIComponent(`${a.artist} ${a.album}`);
+  const d = await j(`https://itunes.apple.com/search?term=${q}&entity=album&limit=15`, ART);
+  const hits = (d.results || []).filter(r => verify(a, r.artistName, r.collectionName));
+  hits.sort((x, y) => (x.trackCount || 1e6) - (y.trackCount || 1e6));
+  return hits[0] || null;
 }
 async function ok(url) {
   await ART.take();
@@ -89,6 +108,22 @@ async function findMbid(a) {
     return { rgid: rg.id, artist_mbid: (cred.artist || {}).id || "" };
   }
   return null;
+}
+
+// One request, no key, ~300ms, and the collection id already came back with the
+// cover. MusicBrainz needs a search plus a release fetch, each behind the 1/sec
+// queue, so this is tried first and MusicBrainz only covers what iTunes missed.
+async function itunesTracks(a) {
+  const d = await j(`https://itunes.apple.com/lookup?id=${a.itid}&entity=song&limit=300`, ART);
+  const songs = (d.results || []).filter(r => r.wrapperType === "track" && r.kind === "song");
+  if (!songs.length) return null;
+  songs.sort((x, y) => (x.discNumber || 1) - (y.discNumber || 1) ||
+                       (x.trackNumber || 0) - (y.trackNumber || 0));
+  return {
+    full_tracks: songs.map((t, k) => ({ n: t.trackNumber || k + 1, name: t.trackName || "" })),
+    total_tracks: songs.length,
+    discs: Math.max(1, ...songs.map(t => t.discNumber || 1)),
+  };
 }
 
 async function findTracklist(a) {
@@ -148,15 +183,35 @@ export async function enrich(a, { wantArt = true, wantIds = true, wantTracks = t
       a.art = c ? c.url : null; a.art_src = c ? c.src : ""; a.art_tried = true; changed = true;
       await flush();
     }
+    if (wantTracks && !a.total_tracks && !a.tracks_tried && a.itid) {
+      const t = await itunesTracks(a);
+      if (t) {
+        Object.assign(a, t);
+        a.tracks_tried = true; recomputeSpins(a); changed = true;
+        await flush();
+      }
+    }
+    // only RateYourMusic links need MusicBrainz now, and they hang off the
+    // artist id, so this runs after art and tracklists are already on screen
     if (wantIds && !a.rgid && !a.mbid && !a.mbid_tried) {
       const m = await findMbid(a);
       if (m) { a.rgid = m.rgid; a.artist_mbid = a.artist_mbid || m.artist_mbid; }
       a.mbid_tried = true; changed = true;
     }
+    // iTunes does not have everything — it returns no Whole Lotta Red for
+    // Playboi Carti, only singles by other artists. Cover Art Archive covers
+    // those, but only now that the lookup above has an id to ask with.
+    if (wantArt && !a.art && !a.caa_tried && (a.mbid || a.rgid)) {
+      const c = await caaArt(a);
+      if (c) { a.art = c.url; a.art_src = c.src; }
+      a.caa_tried = true; changed = true;
+      await flush();
+    }
     if (wantTracks && !a.total_tracks && !a.tracks_tried && (a.mbid || a.rgid)) {
       const t = await findTracklist(a);
       if (t) Object.assign(a, t);
       a.tracks_tried = true; recomputeSpins(a); changed = true;
+      await flush();
     }
     if (wantRym && !a.rym && !a.rym_tried && a.artist_mbid) {
       let map = rymByArtist.get(a.artist_mbid);
@@ -174,20 +229,33 @@ export async function enrich(a, { wantArt = true, wantIds = true, wantTracks = t
 }
 
 // The filmstrip shows roughly a dozen thumbnails either side of the current
-// album, so cover art is fetched across that whole window. Tracklists and
-// RateYourMusic links are slower and only matter for what you are about to
-// rate, so they stay close to the cursor.
-export function prefetch(view, i, { art = 14, deep = 4 } = {}) {
+// album, so iTunes art covers that whole window and tracklists a little of it.
+//
+// Only the album under the cursor touches MusicBrainz. Measured at 2s a request
+// and up to 18s when pushed, nine of those per cursor move stalled the window:
+// nine albums sat mid-enrich for the better part of a minute each. One album at
+// a time is inside what MusicBrainz allows at any speed a person can rate.
+let lastI = -1;
+const ID_AHEAD = 3;     // albums ahead of the cursor allowed a MusicBrainz lookup
+
+export function prefetch(view, i, { art = 14, tracks = 4 } = {}) {
   const cur = view[i];
   if (cur) enrich(cur);
+  // the window leans the way you are travelling. symmetric, half the budget
+  // went to albums behind the cursor, whose covers are already fetched and on
+  // screen, while the ones about to arrive were still queued.
+  const dir = lastI >= 0 && i < lastI ? -1 : 1;
+  lastI = i;
+  const behind = Math.ceil(art / 3);
   for (let k = 1; k <= art; k++) {
-    for (const a of [view[i + k], view[i - k]]) {
-      if (!a) continue;
-      const near = k <= deep;
-      // every musicbrainz step is gated on near. ungating the id lookup put all
-      // 29 albums of the art window into a 1/sec queue on every cursor move,
-      // which outran the rate at which the queue drained.
-      enrich(a, { wantIds: near, wantTracks: near, wantRym: near });
+    for (const [a, ahead] of [[view[i + dir * k], true], [view[i - dir * k], false]]) {
+      if (!a || (!ahead && k > behind)) continue;
+      // iTunes has no entry for a good half of a library like this — no Whole
+      // Lotta Red, little classical, few anime soundtracks. Cover Art Archive
+      // has them but needs an id, and ids cost a MusicBrainz request a second.
+      // So that budget goes only to albums iTunes has already failed on.
+      const needsId = ahead && k <= ID_AHEAD && a.art_tried && !a.art && !a.mbid_tried;
+      enrich(a, { wantIds: needsId, wantRym: false, wantTracks: k <= tracks });
     }
   }
 }
