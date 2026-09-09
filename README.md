@@ -1,4 +1,4 @@
-# rate_my_library
+# rate-my-library
 
 Rate your albums fast from your listening history, then carry the ratings over to
 RateYourMusic. Runs in a browser or from the command line, with nothing outside the
@@ -6,7 +6,7 @@ Python standard library.
 
 ## Two ways to run it
 
-**In a browser**, with nothing to install: <https://kenny-t-vo.github.io/rate_my_library/>.
+**In a browser**, with nothing to install: <https://kenny-t-vo.github.io/rate-my-library/>.
 Drop your export on the page and start rating. It is parsed in the tab, ratings are
 stored in that browser, and the file is never uploaded. See `web/README.md`.
 
@@ -16,14 +16,14 @@ rather than as you go, and writes its output to files.
 ## Setup
 
 ```bash
-git clone https://github.com/kenny-t-vo/rate_my_library && cd rate_my_library
+git clone https://github.com/kenny-t-vo/rate-my-library && cd rate-my-library
 /usr/bin/python3 build.py ~/Downloads/scrobbles-you-0000000.csv --min-plays 8
 ./rate
 ```
 
 `build.py` reads your history, merges edition variants and downloads cover art.
 `./rate` starts the app at <http://127.0.0.1:8777>. On macOS you can double-click
-**rate_my_library.command** in Finder instead.
+**rate-my-library.command** in Finder instead.
 
 ## Where the history comes from
 

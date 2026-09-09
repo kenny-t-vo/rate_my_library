@@ -96,9 +96,9 @@ def write_dashboard():
            "{:,}".format(a["plays"]), a["spins"])
         for i, (v, a, rec) in enumerate(rows))
 
-    doc = """<!doctype html><meta charset="utf-8"><title>rate_my_library</title>
+    doc = """<!doctype html><meta charset="utf-8"><title>rate-my-library</title>
 <style>%s</style><div class="wrap">
-<header><span class="lbl">rate_my_library.</span><span class="lbl">%s</span></header><hr class="rule">
+<header><span class="lbl">rate-my-library.</span><span class="lbl">%s</span></header><hr class="rule">
 <h1>ratings.</h1><div class="sub">%d albums rated from your listening history</div>
 <hr class="rule thin">
 <div class="stats">
@@ -137,7 +137,7 @@ def write_rym_queue():
            _stars(v), v, "direct" if a.get("rym") else "search")
         for i, (v, a, _) in enumerate(rows))
 
-    doc = """<!doctype html><meta charset="utf-8"><title>rate_my_library / rym</title>
+    doc = """<!doctype html><meta charset="utf-8"><title>rate-my-library / rym</title>
 <style>%s
 .row{display:grid;grid-template-columns:30px 34px 1fr 104px 54px;gap:12px;align-items:baseline;
  padding:7px 6px;border-bottom:1px solid var(--rule)}
@@ -156,7 +156,7 @@ button:hover{color:var(--purple)}
 .help{margin-top:34px;padding-top:12px;border-top:1px solid var(--rule);color:var(--dim);font-size:14px}
 kbd{font:11px ui-monospace,Menlo,monospace;border:1px solid var(--rule);padding:1px 5px;color:var(--fg)}
 </style><div class="wrap">
-<header><span class="lbl">rate_my_library.</span><span class="lbl">transfer queue.</span></header><hr class="rule">
+<header><span class="lbl">rate-my-library.</span><span class="lbl">transfer queue.</span></header><hr class="rule">
 <h1>rateyourmusic.</h1>
 <div class="sub">Your ratings, highest first. <b>direct</b> opens the album page. <b>search</b> opens a prefilled RYM search
 for that album. Ticks are saved in this browser.</div>

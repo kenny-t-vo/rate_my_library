@@ -1,4 +1,4 @@
-# rate_my_library, in the browser
+# rate-my-library, in the browser
 
 The same app with no clone and no terminal. Open `index.html` from any static
 host, drop in your listening history, and rate. The file is parsed here and never

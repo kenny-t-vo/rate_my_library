@@ -486,6 +486,7 @@ function bind(){
   $("#ratGo").onclick=()=>$("#impRatings").click();
   $("#wipeGo").onclick=async()=>{
     if(!confirm("Erase the library and every rating in this browser? This cannot be undone."))return;
+    // underscore intentional, see the DB constant in lib/store.js
     indexedDB.deleteDatabase("rate_my_library"); location.reload();};
   // a filter tap on mobile should close the drawer it was tapped in
   $(".colL").addEventListener("click",e=>{
@@ -628,7 +629,7 @@ function downloadAll(){
   dl("ratings.csv",csv,"text/csv;charset=utf-8");
   dl("ratings.json",JSON.stringify({exported:new Date().toISOString(),
     ratings:Object.fromEntries(rows.map(([rec,a])=>[a.id,rec]))},null,1),"application/json");
-  let md=[`# rate_my_library`,"",`${rows.length} albums · mean ${
+  let md=[`# rate-my-library`,"",`${rows.length} albums · mean ${
     (rows.reduce((s,[r])=>s+r.rating,0)/rows.length).toFixed(2)}`,""],cur=null;
   for(const [rec,a] of rows){
     if(rec.rating!==cur){cur=rec.rating;md.push("",`## ${starStr(cur)}  (${cur.toFixed(1)})`,"");}
@@ -674,8 +675,8 @@ function dashboardHTML(){
      <div class="by">${esc(a.artist)}</div>${rec.note?`<div class="note">${esc(rec.note)}</div>`:""}</td>
      <td style="white-space:nowrap;width:96px">${starStr(rec.rating)} <span class="num">${rec.rating.toFixed(1)}</span></td>
      <td class="num" style="width:70px">${a.plays.toLocaleString()}<br>${Math.round(a.spins)}</td></tr>`).join("");
-  return `<!doctype html><meta charset="utf-8"><title>rate_my_library</title><style>${DOC_CSS}</style>
-<div class="wrap"><div style="display:flex;justify-content:space-between"><span class="lbl">rate_my_library.</span>
+  return `<!doctype html><meta charset="utf-8"><title>rate-my-library</title><style>${DOC_CSS}</style>
+<div class="wrap"><div style="display:flex;justify-content:space-between"><span class="lbl">rate-my-library.</span>
 <span class="lbl">${new Date().toLocaleDateString()}</span></div><hr>
 <h1>ratings.</h1><div class="sub">${n} albums rated from your listening history</div><hr class="thin">
 <div class="stats"><div class="stat"><b>${n}</b><span class="lbl">rated</span></div>
@@ -694,14 +695,14 @@ function rymQueueHTML(){
      <span class="by"> &middot; ${esc(a.artist)}</span></span>
      <span style="white-space:nowrap">${starStr(rec.rating)} <span class="num">${rec.rating.toFixed(1)}</span></span>
      <span class="num">${a.rym?"direct":"search"}</span></div>`).join("");
-  return `<!doctype html><meta charset="utf-8"><title>rate_my_library / rym</title><style>${DOC_CSS}
+  return `<!doctype html><meta charset="utf-8"><title>rate-my-library / rym</title><style>${DOC_CSS}
 .row{display:grid;grid-template-columns:30px 34px 1fr 104px 54px;gap:12px;align-items:baseline;
 padding:7px 6px;border-bottom:1px solid var(--rule)}
 .row:hover{background:#f6f6f6}.row.cur{background:#eef;outline:1px solid var(--blue)}
 .row.done{opacity:.4}.ck{cursor:pointer;font:12px ui-monospace,Menlo,monospace;color:var(--dim)}
 .row.done .ck{color:var(--blue)}button{font:inherit;background:none;border:0;color:var(--blue);
 cursor:pointer;text-decoration:underline;padding:0}</style>
-<div class="wrap"><div style="display:flex;justify-content:space-between"><span class="lbl">rate_my_library.</span>
+<div class="wrap"><div style="display:flex;justify-content:space-between"><span class="lbl">rate-my-library.</span>
 <span class="lbl">transfer queue.</span></div><hr>
 <h1>rateyourmusic.</h1><div class="sub"><b>direct</b> opens the album page. <b>search</b> opens a
 prefilled RYM search. Ticks are saved in this browser. ${direct} of ${rows.length} are direct.</div>

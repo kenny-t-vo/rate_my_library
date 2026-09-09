@@ -1,6 +1,9 @@
 // IndexedDB. Everything the app knows lives here and nothing leaves the
 // browser: no account, no server, no request carrying your listening history.
 
+// keeps the underscore the project was renamed away from. this string is where
+// every existing browser's ratings live; changing it opens an empty database.
+// web/app.js passes the same literal to deleteDatabase.
 const DB = "rate_my_library", VER = 1;
 let _db = null;
 

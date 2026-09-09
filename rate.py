@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-rate.py - local rating server for rate_my_library.
+rate.py - local rating server for rate-my-library.
 
 Persistence has three layers:
   data/ratings.json    live state, rewritten atomically on every change
@@ -183,7 +183,7 @@ def export_json():
 
 def export_markdown():
     rows = rated_rows()
-    lines = ["# rate_my_library", "",
+    lines = ["# rate-my-library", "",
              "%d albums · mean %.2f" % (len(rows),
                 sum(v for v, _, _ in rows) / len(rows) if rows else 0), ""]
     cur = None
@@ -372,7 +372,7 @@ def main():
     os.makedirs(SNAPS, exist_ok=True)
     r = load_ratings()
     url = "http://127.0.0.1:%d/" % a.port
-    print("rate_my_library  %d albums, %d rated" % (len(albums()),
+    print("rate-my-library  %d albums, %d rated" % (len(albums()),
           len([v for v in r.values() if v.get('rating')])))
     print("  -> %s   (every change is saved; Ctrl-C to stop)" % url)
     if not a.no_open:
