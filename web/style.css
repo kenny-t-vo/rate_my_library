@@ -234,7 +234,9 @@ footer{flex:none;border-top:var(--hair) solid var(--rule2);
 #save{display:flex;align-items:center;gap:calc(var(--s1)*.8)}
 #save .dot{width:var(--dot);height:var(--dot);border-radius:50%;background:var(--blue);flex:none}
 #save.pend .dot{background:var(--purple)}
-#save.err .dot{background:var(--purple)}
+/* the palette has no red, so a failure reads as a hollow dot rather than a
+   second purple that is indistinguishable from pending */
+#save.err .dot{background:var(--bg);border:var(--hair) solid var(--purple)}
 
 /* ══ overlays ════════════════════════════════════════════════════════ */
 .ov{position:fixed;inset:0;z-index:40;background:rgba(255,255,255,.86);display:none;
