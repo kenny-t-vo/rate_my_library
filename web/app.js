@@ -639,27 +639,46 @@ function downloadAll(){
   return rows.length;
 }
 
+// The exported pages are standalone files opened from disk, so the tokens are
+// inlined rather than imported from assets/type.css, and they carry no woff2:
+// display falls back to Times. Values are copied from type.css and must track
+// it. Figures use the body face with tabular-nums, as they do in the app.
 const DOC_CSS=`*{box-sizing:border-box;margin:0;padding:0}
-:root{--fg:#111;--dim:#6b6b6b;--rule:#d8d8d8;--blue:#0000ee;--purple:#551a8b}
-body{background:#fff;color:var(--fg);font:14px/1.45 "Times New Roman",Times,serif;
-padding:52px 40px 120px}.wrap{max-width:940px;margin:0 auto}
-.lbl{font:10.5px/1 "Times New Roman",Times,serif;letter-spacing:.09em;color:var(--dim)}
-hr{border:0;border-top:1px solid var(--fg);margin:0}hr.thin{border-top-color:var(--rule)}
-h1{font-size:30px;font-weight:400;letter-spacing:-.015em;margin:26px 0 6px}
-.sub{color:var(--dim);margin-bottom:34px}
-.stats{display:flex;gap:52px;padding:20px 0}
-.stat b{display:block;font:400 22px/1 ui-monospace,Menlo,monospace;margin-bottom:7px}
-.hrow{display:grid;grid-template-columns:74px 1fr 42px;gap:14px;align-items:center;height:20px}
+:root{--bg:#fff;--fg:#111;--dim:#6f6f6f;--faint:#9a9a9a;--rule:#dcdcdc;--wash:#f2f2f7;
+--blue:#0000ee;--purple:#551a8b;
+--body:"Plantin","Plantin MT Pro","Times New Roman",Times,"Liberation Serif","Hiragino Mincho ProN","Yu Mincho",serif;
+--display:"Times New Roman",Times,serif;
+--t1:22px;--t2:16px;--t3:14px;--t4:12.5px;--t5:11px;--t6:10.5px;
+--s1:6px;--s2:12px;--s3:22px;--s4:40px;--s5:72px;--track:-.01em;--hair:1px}
+body{background:var(--bg);color:var(--fg);font:var(--t3)/1.5 var(--body);
+letter-spacing:var(--track);padding:var(--s5) var(--s4) calc(var(--s5) * 1.6)}
+.wrap{max-width:940px;margin:0 auto}
+.lbl{font:var(--t6)/1 var(--body);letter-spacing:.09em;color:var(--faint)}
+hr{border:0;border-top:var(--hair) solid var(--fg);margin:0}
+hr.thin{border-top-color:var(--rule)}
+h1{font:var(--t1)/1.1 var(--display);font-weight:400;letter-spacing:-.018em;
+margin:var(--s3) 0 var(--s1)}
+.sub{color:var(--dim);margin-bottom:var(--s4)}
+.stats{display:flex;gap:var(--s5);padding:var(--s3) 0}
+.stat b{display:block;font:400 var(--t1)/1 var(--body);font-variant-numeric:tabular-nums;
+margin-bottom:var(--s1)}
+.hrow{display:grid;grid-template-columns:74px 1fr 42px;gap:var(--s2);align-items:center;height:20px}
 .hrow i{display:block;height:8px;background:var(--blue)}
-.hrow .v,.hrow .n{font:11px/1 ui-monospace,Menlo,monospace}.hrow .n{color:var(--dim)}
-table{width:100%;border-collapse:collapse;margin-top:8px}
-td{padding:10px 10px 10px 0;border-bottom:1px solid var(--rule);vertical-align:middle}
-.rk{width:38px;font:11px/1 ui-monospace,Menlo,monospace;color:var(--dim);text-align:right;padding-right:14px}
-img{width:46px;height:46px;object-fit:cover;display:block;background:#f0f0f0}
-.al{font-size:14px}.by{color:var(--dim);font-size:12.5px}
-.note{color:var(--dim);font-size:12px;font-style:italic;margin-top:3px;max-width:46ch}
-.num{font:12px/1 ui-monospace,Menlo,monospace;color:var(--dim);text-align:right;white-space:nowrap}
-a{color:var(--blue)}a:visited{color:var(--purple)}`;
+.hrow .v,.hrow .n{font:var(--t5)/1 var(--body);font-variant-numeric:tabular-nums}
+.hrow .n{color:var(--dim)}
+table{width:100%;border-collapse:collapse;margin-top:var(--s1)}
+td{padding:var(--s2) var(--s2) var(--s2) 0;border-bottom:var(--hair) solid var(--rule);
+vertical-align:middle}
+.rk{width:38px;font:var(--t5)/1 var(--body);font-variant-numeric:tabular-nums;
+color:var(--faint);text-align:right;padding-right:var(--s2)}
+img{width:46px;height:46px;object-fit:cover;display:block;background:var(--wash)}
+.al{font-size:var(--t3)}
+.by{color:var(--dim);font-size:var(--t4)}
+.note{color:var(--dim);font-size:var(--t4);font-style:italic;margin-top:calc(var(--s1) / 2);max-width:46ch}
+.num{font:var(--t4)/1 var(--body);font-variant-numeric:tabular-nums;color:var(--dim);
+text-align:right;white-space:nowrap}
+a{color:var(--blue);text-decoration:underline;text-underline-offset:2px}
+a:visited{color:var(--purple)}`;
 
 function dashboardHTML(){
   const rows=ratedRows(), n=rows.length;
